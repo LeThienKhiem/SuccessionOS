@@ -2442,7 +2442,7 @@ export const aiCareerPaths: AICareerPath[] = [
         gap: 1,
         priority: "medium",
         why: "CM phải present weekly construction status to PD và client — format và conciseness cần cải thiện.",
-        internalExperts: [{ employeeId: "emp-004", level: 3, availableForMentoring: true, notes: "PQH review LVD's reports hàng tuần và give structured feedback" }],
+        internalExperts: [{ employeeId: "emp-004", level: 4, availableForMentoring: true, notes: "PQH review LVD's reports hàng tuần và give structured feedback" }],
         externalCourses: [
           {
             name: "Effective Construction Reporting",
