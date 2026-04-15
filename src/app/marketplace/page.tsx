@@ -297,7 +297,7 @@ const baseModules: MarketplaceModule[] = [
     price: 99,
     icon: "Sparkles",
     highlight: "IDP draft tự động trong 30 giây",
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: "addon-ai-risk",
@@ -499,6 +499,7 @@ export default function MarketplacePage() {
   const [filter, setFilter] = React.useState<Filter>("all");
   const [modal, setModal] = React.useState<null | "activate" | "remove">(null);
   const [toast, setToast] = React.useState<null | { text: string }>(null);
+  const [selectedAddon, setSelectedAddon] = React.useState<null | "market-intel" | "ai-path">(null);
 
   const showToast = React.useCallback((text: string) => {
     setToast({ text });
@@ -523,6 +524,15 @@ export default function MarketplacePage() {
 
     const out: MarketplaceModule[] = [];
     for (const m of baseModules) {
+      if (m.id === "addon-ai-path") {
+        out.push({
+          ...m,
+          status: isActive("aiCareerPath") ? "active" : "available",
+          price: 99,
+          comingSoon: false,
+        });
+        continue;
+      }
       if (m.id === "addon-dashboard") out.push(marketIntel);
       out.push(m);
     }
@@ -692,7 +702,10 @@ export default function MarketplacePage() {
                           disabled: false,
                           title: "",
                           cls: "text-[#DC2626] border-[#FECACA]",
-                          onClick: () => setModal("remove"),
+                          onClick: () => {
+                            setSelectedAddon("market-intel");
+                            setModal("remove");
+                          },
                         };
                       }
                       return {
@@ -701,7 +714,36 @@ export default function MarketplacePage() {
                         disabled: false,
                         title: "",
                         cls: "bg-[#4F46E5] text-white",
-                        onClick: () => setModal("activate"),
+                        onClick: () => {
+                          setSelectedAddon("market-intel");
+                          setModal("activate");
+                        },
+                      };
+                    }
+                    if (m.id === "addon-ai-path") {
+                      if (isActive("aiCareerPath")) {
+                        return {
+                          text: "Gỡ bỏ module",
+                          variant: "outline" as const,
+                          disabled: false,
+                          title: "",
+                          cls: "text-[#DC2626] border-[#FECACA]",
+                          onClick: () => {
+                            setSelectedAddon("ai-path");
+                            setModal("remove");
+                          },
+                        };
+                      }
+                      return {
+                        text: "Thêm vào gói — $99/tháng",
+                        variant: "default" as const,
+                        disabled: false,
+                        title: "",
+                        cls: "bg-[#4F46E5] text-white",
+                        onClick: () => {
+                          setSelectedAddon("ai-path");
+                          setModal("activate");
+                        },
                       };
                     }
                     if (m.status === "active" && m.price === 0) {
@@ -830,7 +872,7 @@ export default function MarketplacePage() {
       </div>
 
       {overlayModal({
-        open: modal === "activate",
+        open: modal === "activate" && selectedAddon === "market-intel",
         title: "Kích hoạt Market Intelligence?",
         icon: (
           <div className="h-10 w-10 rounded-xl bg-[#EEF2FF] grid place-items-center">
@@ -862,16 +904,20 @@ export default function MarketplacePage() {
         ),
         confirmText: "Kích hoạt ngay",
         confirmTone: "primary",
-        onClose: () => setModal(null),
+        onClose: () => {
+          setModal(null);
+          setSelectedAddon(null);
+        },
         onConfirm: () => {
           toggleModule("marketIntelligence");
           setModal(null);
+          setSelectedAddon(null);
           showToast("✓ Market Intelligence đã được kích hoạt");
         },
       })}
 
       {overlayModal({
-        open: modal === "remove",
+        open: modal === "remove" && selectedAddon === "market-intel",
         title: "Gỡ bỏ Market Intelligence?",
         icon: (
           <div className="h-10 w-10 rounded-xl bg-[#FFFBEB] grid place-items-center">
@@ -885,10 +931,84 @@ export default function MarketplacePage() {
         ),
         confirmText: "Xác nhận gỡ bỏ",
         confirmTone: "danger",
-        onClose: () => setModal(null),
+        onClose: () => {
+          setModal(null);
+          setSelectedAddon(null);
+        },
         onConfirm: () => {
           toggleModule("marketIntelligence");
           setModal(null);
+          setSelectedAddon(null);
+          showToast("Module đã được gỡ bỏ");
+        },
+      })}
+
+      {overlayModal({
+        open: modal === "activate" && selectedAddon === "ai-path",
+        title: "Kích hoạt AI Career Path?",
+        icon: (
+          <div className="h-10 w-10 rounded-xl bg-[#EEF2FF] grid place-items-center">
+            <Sparkles className="h-5 w-5 text-[#4F46E5]" />
+          </div>
+        ),
+        body: (
+          <div className="space-y-3">
+            <ul className="space-y-2 text-[14px]">
+              {[
+                "Lộ trình phát triển cá nhân hóa bằng AI",
+                "Phân tích kỹ năng cần rèn luyện + mức độ ưu tiên",
+                "Gợi ý chuyên gia nội bộ có thể mentoring",
+                "Khóa học bên ngoài fill skill gap kèm giá + rating",
+                "Milestones và timeline cụ thể",
+              ].map((t) => (
+                <li key={t} className="flex items-start gap-2">
+                  <CheckCircle className="mt-0.5 h-4 w-4 text-[#22C55E]" />
+                  <span>{t}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-[13px] text-[#374151]">
+              <span className="font-semibold">$99 / tháng</span> · Hủy bất kỳ lúc nào
+            </div>
+          </div>
+        ),
+        confirmText: "Kích hoạt ngay",
+        confirmTone: "primary",
+        onClose: () => {
+          setModal(null);
+          setSelectedAddon(null);
+        },
+        onConfirm: () => {
+          toggleModule("aiCareerPath");
+          setModal(null);
+          setSelectedAddon(null);
+          showToast("✓ AI Career Path đã được kích hoạt");
+        },
+      })}
+
+      {overlayModal({
+        open: modal === "remove" && selectedAddon === "ai-path",
+        title: "Gỡ bỏ AI Career Path?",
+        icon: (
+          <div className="h-10 w-10 rounded-xl bg-[#FFFBEB] grid place-items-center">
+            <AlertTriangle className="h-5 w-5 text-[#F59E0B]" />
+          </div>
+        ),
+        body: (
+          <div className="text-[14px] text-[#374151]">
+            Sau khi gỡ, tab “Lộ trình AI” sẽ biến mất hoàn toàn khỏi hồ sơ nhân viên. Dữ liệu phân tích vẫn được lưu trữ.
+          </div>
+        ),
+        confirmText: "Xác nhận gỡ bỏ",
+        confirmTone: "danger",
+        onClose: () => {
+          setModal(null);
+          setSelectedAddon(null);
+        },
+        onConfirm: () => {
+          toggleModule("aiCareerPath");
+          setModal(null);
+          setSelectedAddon(null);
           showToast("Module đã được gỡ bỏ");
         },
       })}

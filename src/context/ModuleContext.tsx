@@ -4,6 +4,7 @@ import * as React from "react";
 
 export interface ModuleState {
   marketIntelligence: boolean;
+  aiCareerPath: boolean;
   // thêm các module khác sau
 }
 
@@ -17,6 +18,7 @@ const STORAGE_KEY = "succession-os-modules";
 
 const defaultState: ModuleState = {
   marketIntelligence: false,
+  aiCareerPath: false,
 };
 
 const ModuleContext = React.createContext<ModuleContextType | null>(null);

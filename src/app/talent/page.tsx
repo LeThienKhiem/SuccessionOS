@@ -389,7 +389,6 @@ export default function TalentPage() {
               pageItems.map((e) => {
                 const dept = departments.find((d) => d.id === e.departmentId);
                 const isHigh = e.riskLevel === "high" || e.riskLevel === "critical";
-                const posTitle = positionById.get(e.positionId) ?? "";
                 const mi = marketByEmployeeId.get(e.id);
 
                 return (
@@ -412,7 +411,7 @@ export default function TalentPage() {
                             {e.email}
                           </div>
                           <div className="truncate text-[12px] text-[#6B7280]">
-                            {posTitle}
+                            {e.currentRoleTitle}
                           </div>
                         </div>
                       </Link>

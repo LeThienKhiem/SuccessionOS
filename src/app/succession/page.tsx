@@ -408,7 +408,7 @@ export default function SuccessionPage() {
                       {currentHolder.name}
                     </div>
                     <div className="text-[13px] text-[#6B7280] truncate">
-                      {positions.find((p) => p.id === currentHolder.positionId)?.titleVi ?? "—"}
+                      {currentHolder.currentRoleTitle ?? "—"}
                     </div>
                   </div>
                 </>
@@ -433,7 +433,6 @@ export default function SuccessionPage() {
               <div className="space-y-3">
                 {candidates.map((c, idx) => {
                   const emp = employees.find((e) => e.id === c.employeeId);
-                  const posTitle = emp ? positions.find((p) => p.id === emp.positionId)?.titleVi : undefined;
 
                   const ready = Math.max(0, Math.min(100, 100 - c.gapScore));
                   const gapTone =
@@ -459,7 +458,7 @@ export default function SuccessionPage() {
                               {emp?.name ?? c.employeeId}
                             </div>
                             <div className="truncate text-[13px] text-[#6B7280]">
-                              {posTitle ?? "—"}
+                              {emp?.currentRoleTitle ?? "—"}
                             </div>
                           </div>
                         </div>

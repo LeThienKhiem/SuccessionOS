@@ -42,6 +42,7 @@ export interface Employee {
   email: string
   departmentId: string
   positionId: string
+  currentRoleTitle: string  // Chức danh thực tế hiện tại — dùng để hiển thị (khác positionId dùng cho org chart)
   tier: TalentTier
   careerTrack: CareerTrack
 

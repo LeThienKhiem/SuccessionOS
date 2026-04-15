@@ -327,7 +327,7 @@ export default function IDPPage() {
                               {emp.name}
                             </div>
                             <div className="truncate text-[12px] text-[#6B7280]">
-                              {positionTitleById.get(emp.positionId) ?? "—"}
+                              {emp.currentRoleTitle ?? "—"}
                             </div>
                           </div>
                         </div>
