@@ -10,10 +10,10 @@ import {
   GitMerge,
   LayoutGrid,
   Search,
-  Sparkles,
   Star,
   TrendingUp,
   ChevronDown,
+  UserCheck,
   X,
 } from "lucide-react";
 
@@ -25,8 +25,8 @@ import { getNineBoxQuadrant, getTierLabel } from "@/data/assessments";
 import { EmployeeAvatar } from "@/components/EmployeeAvatar";
 import { KnowledgeTransferPanel } from "@/components/KnowledgeTransferPanel";
 import { ReadinessBadge } from "@/components/ReadinessBadge";
-import { TierBadge } from "@/components/TierBadge";
 import { Button } from "@/components/ui/button";
+import type { Employee } from "@/data/types";
 
 type Tab = "matrix" | "byPosition";
 
@@ -61,6 +61,13 @@ function tierAvatarStyle(tier: string) {
   if (tier === "core") return "bg-[#EDE9FE] text-[#4F46E5]";
   if (tier === "potential") return "bg-[#DBEAFE] text-[#1D4ED8]";
   return "bg-[#CCFBF1] text-[#0F766E]";
+}
+
+function computeFitScore(e: Employee): number {
+  let base = e.overallScore;
+  if (e.riskScore > 50) base -= 10;
+  if (e.idpStatus === "active") base += 5;
+  return Math.max(0, Math.min(100, base));
 }
 
 function cellStyle(row: 1 | 2 | 3, col: 1 | 2 | 3) {
@@ -113,6 +120,12 @@ export default function SuccessionPage() {
   // Track manual successors được add (prototype - in-memory only)
   const [manualSuccessors, setManualSuccessors] = React.useState<Record<string, string[]>>({});
 
+  const [toast, setToast] = React.useState<null | { text: string }>(null);
+  const showToast = React.useCallback((text: string) => {
+    setToast({ text });
+    window.setTimeout(() => setToast(null), 3500);
+  }, []);
+
   React.useEffect(() => {
     const sp = new URLSearchParams(window.location.search);
     const p = sp.get("position");
@@ -152,11 +165,12 @@ export default function SuccessionPage() {
 
   const currentHolder = employees.find((e) => e.id === selectedPosition.currentHolderId);
 
-  function addSuccessor(positionId: string, employeeId: string) {
+  function addSuccessorsBulk(positionId: string, employeeIds: string[]) {
+    if (employeeIds.length === 0) return;
     setManualSuccessors((prev) => {
-      const curr = prev[positionId] ?? [];
-      if (curr.includes(employeeId)) return prev;
-      return { ...prev, [positionId]: [...curr, employeeId] };
+      const curr = new Set(prev[positionId] ?? []);
+      for (const id of employeeIds) curr.add(id);
+      return { ...prev, [positionId]: Array.from(curr) };
     });
   }
 
@@ -684,13 +698,52 @@ export default function SuccessionPage() {
         positionId={searchModal.positionId}
         onClose={() => setSearchModal({ open: false, positionId: null })}
         manualSuccessors={manualSuccessors}
-        onAdd={(positionId, employeeId) => addSuccessor(positionId, employeeId)}
         employees={employees}
         positions={positions}
         successionMap={successionMap}
+        onBulkAdd={(positionId, employeeIds, positionTitleVi) => {
+          addSuccessorsBulk(positionId, employeeIds);
+          showToast(
+            `Đã thêm ${employeeIds.length} ứng viên vào danh sách kế thừa ${positionTitleVi}`
+          );
+        }}
       />
+
+      {toast ? (
+        <div className="fixed bottom-5 right-5 z-[60] rounded-lg bg-[#111827] px-5 py-3 text-[14px] text-white shadow-[0_10px_24px_rgba(0,0,0,0.25)]">
+          {toast.text}
+        </div>
+      ) : null}
     </div>
   );
+}
+
+function departmentName(departmentId: string) {
+  return departments.find((d) => d.id === departmentId)?.name ?? "—";
+}
+
+function fitScoreBarColor(score: number) {
+  if (score >= 80) return "#22C55E";
+  if (score >= 60) return "#F59E0B";
+  return "#EF4444";
+}
+
+function riskRetentionBadge(level: Employee["riskLevel"]) {
+  if (level === "low")
+    return { label: "Thấp", className: "bg-[#DCFCE7] text-[#15803D]" };
+  if (level === "medium")
+    return { label: "TB", className: "bg-[#FEF9C3] text-[#854D0E]" };
+  if (level === "high")
+    return { label: "Cao", className: "bg-[#FEE2E2] text-[#DC2626]" };
+  return { label: "Rất cao", className: "bg-[#DC2626] text-white" };
+}
+
+function readinessCell(readiness: Employee["readiness"]) {
+  if (readiness === "now")
+    return { text: "Sẵn sàng ngay", color: "#15803D" };
+  if (readiness === "1-2yr")
+    return { text: "Trung hạn 1–2 năm", color: "#B45309" };
+  return { text: "Dài hạn 3–5 năm", color: "#6B7280" };
 }
 
 function CandidateSearchModal(props: {
@@ -698,31 +751,60 @@ function CandidateSearchModal(props: {
   positionId: string | null;
   onClose: () => void;
   manualSuccessors: Record<string, string[]>;
-  onAdd: (positionId: string, employeeId: string) => void;
+  onBulkAdd: (positionId: string, employeeIds: string[], positionTitleVi: string) => void;
   employees: typeof employees;
   positions: typeof positions;
   successionMap: typeof successionMap;
 }) {
-  const { open, positionId, onClose, manualSuccessors, onAdd, employees, positions, successionMap } =
+  const { open, positionId, onClose, manualSuccessors, onBulkAdd, employees, positions, successionMap } =
     props;
 
-  const [nameQuery, setNameQuery] = React.useState("");
-  const [tier, setTier] = React.useState<"all" | "core" | "potential" | "successor">("all");
-  const [sort, setSort] = React.useState<"gap" | "overall" | "name">("gap");
+  const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [filters, setFilters] = React.useState<{
+    minFitScore: number;
+    maxRisk: string;
+    idpActive: boolean;
+  }>({ minFitScore: 0, maxRisk: "all", idpActive: false });
+
+  const [openExpandSearch, setOpenExpandSearch] = React.useState(false);
+  const [openBasic, setOpenBasic] = React.useState(true);
+  const [openAdvanced, setOpenAdvanced] = React.useState(false);
+  const [criteriaQuery, setCriteriaQuery] = React.useState("");
+  const [basic, setBasic] = React.useState({
+    dept: false,
+    tier: false,
+    title: false,
+    readiness: false,
+    manager: false,
+  });
+  const [advRiskLt30, setAdvRiskLt30] = React.useState(false);
+  const [advKtp, setAdvKtp] = React.useState(false);
 
   React.useEffect(() => {
     if (!open) return;
-    setNameQuery("");
-    setTier("all");
-    setSort("gap");
+    setSelectedIds([]);
+    setCurrentPage(1);
+    setFilters({ minFitScore: 0, maxRisk: "all", idpActive: false });
+    setCriteriaQuery("");
+    setOpenExpandSearch(false);
+    setOpenBasic(true);
+    setOpenAdvanced(false);
+    setBasic({
+      dept: false,
+      tier: false,
+      title: false,
+      readiness: false,
+      manager: false,
+    });
+    setAdvRiskLt30(false);
+    setAdvKtp(false);
   }, [open, positionId]);
 
   const position = React.useMemo(() => {
     if (!positionId) return null;
     return positions.find((p) => p.id === positionId) ?? null;
   }, [positionId, positions]);
-
-  const requiredOverall = position ? requiredOverallScoreForPosition(position.level) : 85;
 
   const excludedIds = React.useMemo(() => {
     if (!positionId) return new Set<string>();
@@ -732,53 +814,105 @@ function CandidateSearchModal(props: {
     return new Set<string>([...(original ?? []), ...(manual ?? [])]);
   }, [manualSuccessors, positionId, successionMap]);
 
-  const candidates = React.useMemo(() => {
+  const filteredEmployees = React.useMemo(() => {
     if (!open || !positionId || !position) return [];
 
     const holderId = position.currentHolderId;
+    const holder = employees.find((e) => e.id === holderId);
 
-    const list = employees
-      .filter((e) => e.id !== holderId)
-      .filter((e) => !excludedIds.has(e.id))
-      .filter((e) => {
-        if (!nameQuery.trim()) return true;
-        return e.name.toLowerCase().includes(nameQuery.trim().toLowerCase());
-      })
-      .filter((e) => {
-        if (tier === "all") return true;
-        return e.tier === tier;
-      })
-      .map((e) => {
-        const gapScore = requiredOverall - e.overallScore;
-        return { employee: e, gapScore };
-      });
+    let list = employees.filter((e) => e.id !== holderId).filter((e) => !excludedIds.has(e.id));
 
-    const sorted = [...list].sort((a, b) => {
-      if (sort === "overall") return b.employee.overallScore - a.employee.overallScore;
-      if (sort === "name") return a.employee.name.localeCompare(b.employee.name, "vi");
-      // default: lowest gap first
-      return a.gapScore - b.gapScore;
-    });
+    const q =
+      openExpandSearch && criteriaQuery.trim()
+        ? criteriaQuery.trim().toLowerCase()
+        : "";
+    if (q) {
+      list = list.filter(
+        (e) =>
+          e.name.toLowerCase().includes(q) ||
+          e.id.toLowerCase().includes(q) ||
+          (e.currentRoleTitle ?? "").toLowerCase().includes(q)
+      );
+    }
 
-    return sorted.slice(0, 10);
-  }, [employees, excludedIds, nameQuery, open, position, positionId, requiredOverall, sort, tier]);
+    if (basic.dept) list = list.filter((e) => e.departmentId === position.departmentId);
+    if (basic.tier) list = list.filter((e) => e.tier === "potential" || e.tier === "successor");
+    if (basic.title) list = list.filter((e) => (e.currentRoleTitle ?? "").trim().length > 0);
+    if (basic.readiness)
+      list = list.filter((e) => e.readiness === "now" || e.readiness === "1-2yr");
+    if (basic.manager && holderId) list = list.filter((e) => e.mentorId === holderId);
+
+    if (advRiskLt30) list = list.filter((e) => e.riskScore < 30);
+    if (filters.idpActive) list = list.filter((e) => e.idpStatus === "active");
+    if (advKtp && holder?.currentProjectId) {
+      const pid = holder.currentProjectId;
+      list = list.filter(
+        (e) =>
+          e.currentProjectId === pid &&
+          (e.readiness === "now" || e.readiness === "1-2yr")
+      );
+    }
+
+    list = list.filter((e) => computeFitScore(e) >= filters.minFitScore);
+    if (filters.maxRisk !== "all") {
+      list = list.filter((e) => e.riskLevel === filters.maxRisk);
+    }
+
+    list.sort((a, b) => computeFitScore(b) - computeFitScore(a));
+    return list;
+  }, [
+    advKtp,
+    advRiskLt30,
+    basic,
+    employees,
+    excludedIds,
+    filters.idpActive,
+    filters.maxRisk,
+    filters.minFitScore,
+    open,
+    openExpandSearch,
+    position,
+    positionId,
+    criteriaQuery,
+  ]);
+
+  const pageSize = 10;
+  const total = filteredEmployees.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const pageSlice = React.useMemo(() => {
+    const start = (safePage - 1) * pageSize;
+    return filteredEmployees.slice(start, start + pageSize);
+  }, [filteredEmployees, safePage]);
+
+  React.useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
+
+  const expandCriteriaCount = openExpandSearch && criteriaQuery.trim() ? 1 : 0;
+
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  function addAllSelected() {
+    if (!positionId || !position || selectedIds.length === 0) return;
+    onBulkAdd(positionId, selectedIds, position.titleVi);
+    setSelectedIds([]);
+    onClose();
+  }
 
   if (!open) return null;
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex h-[100dvh] w-full flex-col overflow-hidden bg-white"
       role="dialog"
       aria-modal="true"
       aria-labelledby="candidate-search-modal-title"
-      onClick={onClose}
     >
-      <div
-        className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
-        onClick={(ev) => ev.stopPropagation()}
-      >
-        {/* HEADER */}
-        <div className="flex flex-shrink-0 items-center justify-between border-b border-[#E5E7EB] p-6">
+      {/* Top bar */}
+      <div className="flex shrink-0 items-center justify-between border-b border-[#E5E7EB] px-5 py-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <Search className="h-[18px] w-[18px] shrink-0 text-[#4F46E5]" />
@@ -796,149 +930,338 @@ function CandidateSearchModal(props: {
           >
             <X className="h-4 w-4" />
           </button>
-        </div>
+      </div>
 
-        {/* AI SUGGESTION BANNER */}
-        <div className="flex-shrink-0 border-b border-[#E5E7EB] px-6 py-3">
-          <div className="rounded-lg border border-[#C7D2FE] bg-[#EEF2FF] px-4 py-3">
-            <div className="flex items-start gap-3">
-              <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-[#4F46E5]" />
-              <div className="text-[13px] text-[#374151]">
-                AI gợi ý dựa trên gap score và assessment. Bạn có thể thêm bất kỳ ai từ danh sách.
+      {/* Two columns — full remaining viewport */}
+      <div className="flex min-h-0 flex-1 flex-row">
+        {/* Left — filter panel */}
+        <aside className="flex w-[min(360px,32vw)] min-w-[260px] shrink-0 flex-col overflow-hidden border-r border-[#E5E7EB]">
+            <div className="flex-1 overflow-y-auto p-5">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[13px] font-semibold text-[#111827]">Bộ tiêu chuẩn</span>
+                  <span className="rounded-full bg-[#DCFCE7] px-2 py-0.5 text-[11px] font-semibold text-[#15803D]">
+                    Đã thiết lập
+                  </span>
+                </div>
+                <p className="mt-1 text-[13px] text-[#6B7280]">{position?.titleVi ?? "—"}</p>
+                <div className="mt-2 flex flex-wrap gap-[6px]">
+                  <span className="rounded-full bg-[#EEF2FF] px-3 py-1 text-[12px] text-[#4F46E5]">
+                    Hiệu suất (1)
+                  </span>
+                  <span className="rounded-full bg-[#EEF2FF] px-3 py-1 text-[12px] text-[#4F46E5]">
+                    Năng lực (1)
+                  </span>
+                  <span className="rounded-full bg-[#EEF2FF] px-3 py-1 text-[12px] text-[#4F46E5]">
+                    Tiềm năng (1)
+                  </span>
+                  <span className="rounded-full bg-[#FEE2E2] px-3 py-1 text-[12px] text-[#DC2626]">
+                    Rủi ro (1)
+                  </span>
+                </div>
+              </div>
+
+              <div className="mt-6 border-t border-[#E5E7EB] pt-4">
+                <button
+                  type="button"
+                  onClick={() => setOpenExpandSearch((v) => !v)}
+                  className="flex w-full items-center justify-between gap-2 text-left"
+                >
+                  <span className="text-[13px] font-semibold text-[#111827]">
+                    Tìm kiếm mở rộng ({expandCriteriaCount})
+                  </span>
+                  <ChevronDown
+                    className={[
+                      "h-4 w-4 shrink-0 text-[#6B7280] transition",
+                      openExpandSearch ? "rotate-180" : "",
+                    ].join(" ")}
+                  />
+                </button>
+                {openExpandSearch ? (
+                  <input
+                    value={criteriaQuery}
+                    onChange={(e) => setCriteriaQuery(e.target.value)}
+                    placeholder="Tên tiêu chí..."
+                    className="mt-2 w-full rounded-lg border border-[#E5E7EB] px-3 py-2 text-[13px] outline-none focus:border-[#A5B4FC]"
+                  />
+                ) : null}
+              </div>
+
+              <div className="mt-4 border-t border-[#E5E7EB] pt-4">
+                <button
+                  type="button"
+                  onClick={() => setOpenBasic((v) => !v)}
+                  className="flex w-full items-center justify-between gap-2 text-left"
+                >
+                  <span className="text-[13px] font-semibold text-[#111827]">Thông tin cơ bản</span>
+                  <ChevronDown
+                    className={[
+                      "h-4 w-4 shrink-0 text-[#6B7280] transition",
+                      openBasic ? "rotate-180" : "",
+                    ].join(" ")}
+                  />
+                </button>
+                {openBasic ? (
+                  <div className="mt-3 flex flex-col gap-1.5 text-[13px] text-[#374151]">
+                    <label className="flex cursor-pointer items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        checked={basic.dept}
+                        onChange={(e) => setBasic((b) => ({ ...b, dept: e.target.checked }))}
+                        className="h-3.5 w-3.5 rounded border-[#D1D5DB] accent-[#4F46E5]"
+                      />
+                      Phòng ban (Hiện tại)
+                    </label>
+                    <label className="flex cursor-pointer items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        checked={basic.tier}
+                        onChange={(e) => setBasic((b) => ({ ...b, tier: e.target.checked }))}
+                        className="h-3.5 w-3.5 rounded border-[#D1D5DB] accent-[#4F46E5]"
+                      />
+                      Tầng nhân sự
+                    </label>
+                    <label className="flex cursor-pointer items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        checked={basic.title}
+                        onChange={(e) => setBasic((b) => ({ ...b, title: e.target.checked }))}
+                        className="h-3.5 w-3.5 rounded border-[#D1D5DB] accent-[#4F46E5]"
+                      />
+                      Chức danh hiện tại
+                    </label>
+                    <label className="flex cursor-pointer items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        checked={basic.readiness}
+                        onChange={(e) => setBasic((b) => ({ ...b, readiness: e.target.checked }))}
+                        className="h-3.5 w-3.5 rounded border-[#D1D5DB] accent-[#4F46E5]"
+                      />
+                      Readiness level
+                    </label>
+                    <label className="flex cursor-pointer items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        checked={basic.manager}
+                        onChange={(e) => setBasic((b) => ({ ...b, manager: e.target.checked }))}
+                        className="h-3.5 w-3.5 rounded border-[#D1D5DB] accent-[#4F46E5]"
+                      />
+                      Quản lý trực tiếp
+                    </label>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="mt-4 border-t border-[#E5E7EB] pt-4">
+                <button
+                  type="button"
+                  onClick={() => setOpenAdvanced((v) => !v)}
+                  className="flex w-full items-center justify-between gap-2 text-left"
+                >
+                  <span className="text-[13px] font-semibold text-[#111827]">Thông tin nâng cao</span>
+                  <ChevronDown
+                    className={[
+                      "h-4 w-4 shrink-0 text-[#6B7280] transition",
+                      openAdvanced ? "rotate-180" : "",
+                    ].join(" ")}
+                  />
+                </button>
+                {openAdvanced ? (
+                  <div className="mt-3 flex flex-col gap-1.5 text-[13px] text-[#374151]">
+                    <label className="flex cursor-pointer items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        checked={advRiskLt30}
+                        onChange={(e) => setAdvRiskLt30(e.target.checked)}
+                        className="h-3.5 w-3.5 rounded border-[#D1D5DB] accent-[#4F46E5]"
+                      />
+                      Risk score &lt; 30
+                    </label>
+                    <label className="flex cursor-pointer items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        checked={filters.idpActive}
+                        onChange={(e) => setFilters((f) => ({ ...f, idpActive: e.target.checked }))}
+                        className="h-3.5 w-3.5 rounded border-[#D1D5DB] accent-[#4F46E5]"
+                      />
+                      IDP đang active
+                    </label>
+                    <label className="flex cursor-pointer items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        checked={advKtp}
+                        onChange={(e) => setAdvKtp(e.target.checked)}
+                        className="h-3.5 w-3.5 rounded border-[#D1D5DB] accent-[#4F46E5]"
+                      />
+                      Có KTP với holder
+                    </label>
+                  </div>
+                ) : null}
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* FILTER BAR */}
-        <div className="flex flex-shrink-0 flex-wrap items-center gap-2 border-b border-[#E5E7EB] px-6 py-3">
-          <input
-            value={nameQuery}
-            onChange={(e) => setNameQuery(e.target.value)}
-            placeholder="Tìm theo tên..."
-            className="h-9 max-w-full min-w-0 flex-1 rounded-lg border border-[#E5E7EB] bg-white px-3 text-[13px] outline-none focus:border-[#A5B4FC] sm:max-w-[220px] sm:flex-none"
-          />
-
-          <select
-            value={tier}
-            onChange={(e) => setTier(e.target.value as typeof tier)}
-            className="h-9 w-full max-w-[130px] rounded-lg border border-[#E5E7EB] bg-white px-3 text-[13px]"
-          >
-            <option value="all">Tất cả</option>
-            <option value="core">Nòng cốt</option>
-            <option value="potential">Tiềm năng</option>
-            <option value="successor">Kế thừa</option>
-          </select>
-
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as typeof sort)}
-            className="h-9 w-full max-w-[170px] rounded-lg border border-[#E5E7EB] bg-white px-3 text-[13px]"
-          >
-            <option value="gap">Gap thấp nhất (phù hợp nhất)</option>
-            <option value="overall">Overall score cao nhất</option>
-            <option value="name">Tên A–Z</option>
-          </select>
-        </div>
-
-        {/* CANDIDATE LIST */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
-          {candidates.length === 0 ? (
-            <div className="py-10 text-center text-[13px] text-[#6B7280]">
-              Không tìm thấy ứng viên phù hợp
+            <div className="shrink-0 border-t border-[#E5E7EB] p-5">
+              <button
+                type="button"
+                onClick={() => setCurrentPage(1)}
+                className="w-full rounded-lg bg-[#4F46E5] py-2 text-[14px] font-semibold text-white"
+              >
+                Tìm kiếm
+              </button>
             </div>
-          ) : (
-            <div>
-              {candidates.map(({ employee: e, gapScore }) => {
-                const alreadyAdded = (manualSuccessors[positionId ?? ""] ?? []).includes(e.id);
-                const gapLabel =
-                  gapScore <= 0
-                    ? { text: "✓ Vượt yêu cầu", color: "#16A34A" }
-                    : gapScore <= 15
-                      ? { text: `${gapScore} điểm cần phát triển`, color: "#D97706" }
-                      : { text: `${gapScore} điểm — cần đào tạo nhiều`, color: "#6B7280" };
+        </aside>
 
-                const overallPct = Math.max(0, Math.min(100, e.overallScore));
-
-                return (
-                  <div
-                    key={e.id}
-                    className="mb-2 flex items-center gap-3 rounded-lg border border-[#E5E7EB] bg-white p-3"
+        {/* Right — results */}
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+            <div className="flex shrink-0 items-center justify-between border-b border-[#E5E7EB] px-5 py-4">
+              <div className="text-[14px] font-semibold text-[#111827]">
+                Kết quả tìm kiếm: {total} ứng viên
+              </div>
+              {selectedIds.length > 0 ? (
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="rounded-full bg-[#EEF2FF] px-3 py-1 text-[12px] font-semibold text-[#4F46E5]">
+                    {selectedIds.length} đã chọn
+                  </span>
+                  <button
+                    type="button"
+                    onClick={addAllSelected}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-transparent bg-[#4F46E5] px-3 py-1.5 text-[13px] font-semibold text-white"
                   >
-                    {/* Col 1 — Avatar + Info */}
-                    <div className="flex min-w-0 flex-1 items-center gap-3">
-                      <EmployeeAvatar employee={e} size="sm" className="shrink-0" />
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-semibold text-[#111827]">{e.name}</div>
-                        <div className="truncate text-xs text-gray-500">{e.currentRoleTitle ?? "—"}</div>
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          <TierBadge tier={e.tier} className="scale-90 origin-left" />
-                          <ReadinessBadge readiness={e.readiness} className="scale-90 origin-left" />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Col 2 — Gap scores */}
-                    <div className="w-44 shrink-0 text-sm">
-                      <div className="text-[#374151]">
-                        Overall: <span className="font-semibold">{e.overallScore}</span>/100
-                      </div>
-                      <div className="mt-1 h-1.5 max-w-[120px] rounded-full bg-[#E5E7EB]">
-                        <div
-                          className="h-1.5 rounded-full bg-[#22C55E]"
-                          style={{ width: `${overallPct}%` }}
-                        />
-                      </div>
-                      <div className="mt-1 text-xs leading-snug" style={{ color: gapLabel.color }}>
-                        Gap: {gapLabel.text}
-                      </div>
-                    </div>
-
-                    {/* Col 3 — Action */}
-                    <div className="shrink-0">
-                      {alreadyAdded ? (
-                        <button
-                          type="button"
-                          disabled
-                          className="inline-flex items-center gap-2 whitespace-nowrap rounded-lg bg-[#DCFCE7] px-3 py-1.5 text-sm font-semibold text-[#15803D]"
-                        >
-                          <CheckCircle className="h-3.5 w-3.5" />
-                          Đã thêm
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!positionId) return;
-                            onAdd(positionId, e.id);
-                          }}
-                          className="whitespace-nowrap rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white"
-                        >
-                          Thêm vào kế thừa
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+                    <UserCheck className="h-4 w-4" />
+                    Thêm vào kế thừa
+                  </button>
+                </div>
+              ) : null}
             </div>
-          )}
-        </div>
 
-        {/* FOOTER */}
-        <div className="flex flex-shrink-0 items-center justify-between border-t border-[#E5E7EB] px-6 py-4">
-          <div className="pr-4 text-[12px] text-[#6B7280]">
-            Đây là gợi ý — bạn có thể thêm bất kỳ ai và điều chỉnh sau
+            <div className="min-h-0 flex-1 overflow-y-auto overflow-x-auto p-0">
+              <table className="w-full min-w-[890px] table-fixed border-collapse text-left">
+                <thead className="sticky top-0 z-10 border-b border-[#E5E7EB] bg-white">
+                  <tr className="text-[12px] font-medium uppercase tracking-wide text-gray-500">
+                    <th className="w-10 px-2 py-3" />
+                    <th className="w-[220px] py-3 pl-2 pr-2">Nhân viên</th>
+                    <th className="w-[110px] py-3 pr-2">Phòng ban</th>
+                    <th className="w-[150px] py-3 pr-2">Chức danh</th>
+                    <th className="w-[130px] py-3 pr-2">Mức độ phù hợp</th>
+                    <th className="w-[130px] py-3 pr-2">Sẵn sàng</th>
+                    <th className="w-[110px] py-3 pr-3">Rủi ro rời đi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pageSlice.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-12 text-center text-[13px] text-[#6B7280]">
+                        Không tìm thấy ứng viên phù hợp
+                      </td>
+                    </tr>
+                  ) : (
+                    pageSlice.map((e) => {
+                      const fit = computeFitScore(e);
+                      const barW = `${fit}%`;
+                      const barColor = fitScoreBarColor(fit);
+                      const rCell = readinessCell(e.readiness);
+                      const risk = riskRetentionBadge(e.riskLevel);
+                      const checked = selectedIds.includes(e.id);
+                      return (
+                        <tr
+                          key={e.id}
+                          className={[
+                            "border-b border-[#F3F4F6] transition hover:bg-[#F9FAFB]",
+                            checked ? "bg-[#F5F3FF]" : "",
+                          ].join(" ")}
+                        >
+                          <td className="w-10 px-2 py-3 align-middle">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleSelected(e.id)}
+                              className="h-3.5 w-3.5 rounded border-[#D1D5DB] accent-[#4F46E5]"
+                              aria-label={`Chọn ${e.name}`}
+                            />
+                          </td>
+                          <td className="py-3 pl-2 pr-2 align-middle">
+                            <div className="flex items-center gap-2">
+                              <EmployeeAvatar employee={e} size="sm" className="shrink-0" />
+                              <div className="min-w-0">
+                                <div className="truncate text-[13px] font-medium text-[#111827]">
+                                  {e.name}
+                                </div>
+                                <div className="truncate text-[11px] text-gray-500">{e.id}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 pr-2 align-middle text-[13px] text-gray-500">
+                            <span className="line-clamp-2">{departmentName(e.departmentId)}</span>
+                          </td>
+                          <td className="py-3 pr-2 align-middle text-[13px] text-[#374151]">
+                            <span className="line-clamp-2">{e.currentRoleTitle ?? "—"}</span>
+                          </td>
+                          <td className="py-3 pr-2 align-middle">
+                            <div className="h-1.5 w-[80px] rounded-full bg-[#E5E7EB]">
+                              <div
+                                className="h-1.5 rounded-full"
+                                style={{ width: barW, background: barColor }}
+                              />
+                            </div>
+                            <div className="mt-1 text-[12px] font-semibold text-[#111827]">{fit}%</div>
+                          </td>
+                          <td className="py-3 pr-2 align-middle">
+                            <span className="text-[12px]" style={{ color: rCell.color }}>
+                              {rCell.text}
+                            </span>
+                          </td>
+                          <td className="py-3 pr-3 align-middle">
+                            <span
+                              className={[
+                                "inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                                risk.className,
+                              ].join(" ")}
+                            >
+                              {risk.label}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex shrink-0 items-center justify-between border-t border-[#E5E7EB] px-5 py-3">
+              <div className="text-[12px] text-[#6B7280]">
+                {total === 0 ? (
+                  <>Hiển thị 0 / 0 ứng viên</>
+                ) : (
+                  <>
+                    Hiển thị {(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, total)} /{" "}
+                    {total} ứng viên
+                  </>
+                )}
+              </div>
+              {total > pageSize ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={safePage <= 1}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    className="rounded-lg border border-[#E5E7EB] bg-white px-3 py-1.5 text-[13px] text-[#374151] disabled:opacity-40"
+                  >
+                    Trước
+                  </button>
+                  <button
+                    type="button"
+                    disabled={safePage >= totalPages}
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    className="rounded-lg border border-[#E5E7EB] bg-white px-3 py-1.5 text-[13px] text-[#374151] disabled:opacity-40"
+                  >
+                    Sau
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="h-9 shrink-0 rounded-lg border border-[#E5E7EB] bg-white px-3 text-[13px] text-[#374151] hover:bg-[#F9FAFB]"
-          >
-            Đóng
-          </button>
         </div>
-      </div>
     </div>
   );
 }
