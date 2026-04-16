@@ -84,6 +84,7 @@ export default function Home() {
           iconColor="#6366F1"
           title="Nhân sự trong Chuỗi"
           value={dashboardKPI.totalTalentChain}
+          className="border border-[#E0E7FF] !bg-[#EEF2FF]/35"
           subtitle={
             <div className="flex flex-wrap items-center gap-3">
               <span className="inline-flex items-center gap-2">
@@ -107,6 +108,7 @@ export default function Home() {
           iconColor="#14B8A6"
           title="Vị trí có kế thừa"
           value={`${dashboardKPI.keyPositionsCovered} / ${dashboardKPI.keyPositionsTotal}`}
+          className="border border-[#CCFBF1] !bg-[#F0FDFA]/40"
           subtitle={
             <div className="space-y-2">
               <div className="h-[6px] w-full rounded-full bg-[#E5E7EB]">
@@ -128,7 +130,7 @@ export default function Home() {
           title="Rủi ro cao"
           value={dashboardKPI.highRiskCount}
           subtitle={<span className="text-[13px] text-[#6B7280]">cần xử lý trong 30 ngày</span>}
-          className="border border-[#FECACA] bg-[#FEF2F2]"
+          className="border border-[#FECACA] !bg-[#FEF2F2]/55"
         />
 
         <StatsCard
@@ -136,6 +138,7 @@ export default function Home() {
           iconColor="#F59E0B"
           title="IDP đang thực hiện"
           value={dashboardKPI.idpActiveCount}
+          className="border border-[#FDE68A] !bg-[#FFFBEB]/50"
           subtitle={
             <div className="space-y-2">
               <div className="h-[6px] w-full rounded-full bg-[#E5E7EB]">
@@ -155,7 +158,7 @@ export default function Home() {
       {/* SECTION 3: 2 columns */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
         {/* Left 60% */}
-        <div className="so-card rounded-xl p-5 lg:col-span-3 border-l-4 border-l-[#EF4444]">
+        <div className="so-card rounded-xl p-5 lg:col-span-3 border-l-4 border-l-[#EF4444] !bg-[#FEF2F2]/25">
           <div className="mb-4">
             <div className="text-[16px] font-semibold text-[#374151]">
               Nhân sự rủi ro cao — cần xử lý ngay
@@ -232,7 +235,7 @@ export default function Home() {
         </div>
 
         {/* Right 40% */}
-        <div className="so-card rounded-xl p-5 lg:col-span-2">
+        <div className="so-card rounded-xl p-5 lg:col-span-2 border border-[#E0E7FF] !bg-[#EEF2FF]/25">
           <div className="mb-4">
             <div className="text-[16px] font-semibold text-[#374151]">
               Phân bổ tầng nhân sự
@@ -285,7 +288,7 @@ export default function Home() {
       </div>
 
       {/* SECTION 4: Positions status */}
-      <div className="so-card rounded-xl p-5">
+      <div className="so-card rounded-xl p-5 border border-[#E5E7EB] !bg-[#F9FAFB]">
         <div className="mb-4">
           <div className="text-[16px] font-semibold text-[#374151]">
             Tình trạng 12 Vị trí Then chốt
