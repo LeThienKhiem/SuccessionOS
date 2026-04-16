@@ -20,13 +20,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="vi" className={`${inter.variable} h-full antialiased`}>
-      <body className="min-h-full bg-[#F8F9FC] text-[#374151]">
+    <html lang="vi" className={`${inter.variable} h-full antialiased overflow-x-hidden`}>
+      <body className="min-h-full bg-[#F8F9FC] text-[#374151] overflow-x-hidden">
         <ModuleProvider>
-          <AppSidebar />
-          <main className="min-h-full pl-[240px] bg-[#F8F9FC]">
-            <div className="p-8">{children}</div>
-          </main>
+          <div
+            className="min-h-full"
+            style={{ ["--sidebar-w" as any]: "216px" }}
+          >
+            <AppSidebar />
+            <main className="min-h-full ml-[var(--sidebar-w)] w-[calc(100%-var(--sidebar-w))] bg-[#F8F9FC] overflow-x-hidden">
+              <div className="p-8">{children}</div>
+            </main>
+          </div>
         </ModuleProvider>
       </body>
     </html>

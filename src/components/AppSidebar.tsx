@@ -49,16 +49,16 @@ export function AppSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="fixed inset-y-0 left-0 w-[240px] bg-white border-r border-[#E5E7EB]">
+    <aside className="fixed inset-y-0 left-0 w-[var(--sidebar-w)] bg-white border-r border-[#E5E7EB]">
       <div className="flex h-full flex-col">
-        <div className="px-6 py-6">
+        <div className="px-5 py-5">
           <div className="text-lg font-semibold tracking-tight text-[#4F46E5]">
             SuccessionOS
           </div>
           <div className="mt-1 text-[13px] text-[#6B7280]">PTSC M&amp;C</div>
         </div>
 
-        <nav className="px-3">
+        <nav className="flex-1 min-h-0 overflow-y-auto px-2 pb-4">
           <div className="space-y-4">
             {groups.map((g) => (
               <div key={g.title}>
@@ -97,7 +97,7 @@ export function AppSidebar() {
           </div>
         </nav>
 
-        <div className="mt-auto border-t border-[#E5E7EB] px-6 py-5">
+        <div className="mt-auto border-t border-[#E5E7EB] px-5 py-5">
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-full bg-[#EEF2FF] text-[#4F46E5] grid place-items-center text-sm font-semibold">
               HA
