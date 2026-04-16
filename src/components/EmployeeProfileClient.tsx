@@ -2,15 +2,16 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   AlertCircle,
   ArrowRight,
   CheckCircle,
   FileText,
   GitMerge,
+  History,
   Sparkles,
   Target,
+  ChevronDown,
 } from "lucide-react";
 
 import type { Assessment, Employee, IDP, Project, SuccessionEntry } from "@/data/types";
@@ -31,6 +32,24 @@ import { TierBadge } from "@/components/TierBadge";
 import { Button } from "@/components/ui/button";
 
 type TabKey = "overview" | "ai";
+
+type AuditDotTone = "green" | "amber" | "red";
+type AuditEntry = {
+  id: string;
+  timestamp: string; // "18/04/2025 14:23"
+  by: string;
+  role: string;
+  title: string;
+  details: React.ReactNode;
+  reason: string;
+  tone: AuditDotTone;
+};
+
+function auditDot(tone: AuditDotTone) {
+  if (tone === "amber") return { dot: "bg-[#F59E0B]", ring: "ring-[#FDE68A]" };
+  if (tone === "red") return { dot: "bg-[#DC2626]", ring: "ring-[#FECACA]" };
+  return { dot: "bg-[#22C55E]", ring: "ring-[#BBF7D0]" };
+}
 
 function careerTrackBadge(track: string) {
   if (track === "leadership")
@@ -87,13 +106,13 @@ export function EmployeeProfileClient(props: {
   successionEntry?: SuccessionEntry;
   marketIntelData?: MarketIntelData;
 }) {
-  const router = useRouter();
   const { isActive } = useModuleContext();
 
   const showAITab = isActive("aiCareerPath");
   const showMarketTab = isActive("marketIntelligence");
 
   const [activeTab, setActiveTab] = React.useState<TabKey>("overview");
+  const [openAudit, setOpenAudit] = React.useState(false);
 
   React.useEffect(() => {
     if (!showAITab && activeTab === "ai") setActiveTab("overview");
@@ -531,6 +550,141 @@ export function EmployeeProfileClient(props: {
                 ) : null}
               </div>
             ) : null}
+
+            {/* Audit trail */}
+            <div className="so-card rounded-xl p-6">
+              <button
+                type="button"
+                onClick={() => setOpenAudit((v) => !v)}
+                className="w-full flex items-center justify-between gap-3"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <History className="h-4 w-4 text-[#6B7280]" />
+                  <div className="text-[16px] font-semibold text-[#374151]">
+                    Lịch sử thay đổi
+                  </div>
+                </div>
+                <ChevronDown
+                  className={[
+                    "h-4 w-4 text-[#6B7280] transition",
+                    openAudit ? "rotate-180" : "",
+                  ].join(" ")}
+                />
+              </button>
+
+              {openAudit ? (
+                <div className="mt-4">
+                  {employee.id !== "emp-006" ? (
+                    <div className="rounded-xl border border-dashed border-[#E5E7EB] bg-[#F9FAFB] px-6 py-8 text-center text-[13px] text-[#6B7280]">
+                      Chưa có lịch sử thay đổi
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {(
+                        [
+                          {
+                            id: "a-1",
+                            timestamp: "18/04/2025 14:23",
+                            by: "Lê Khiêm",
+                            role: "HR Admin",
+                            title: "Thay đổi tầng nhân sự",
+                            details: (
+                              <div className="text-[13px] text-[#374151]">
+                                Tiềm năng <span className="text-[#6B7280]">→</span>{" "}
+                                <span className="font-semibold">Nòng cốt</span>
+                              </div>
+                            ),
+                            reason: "Hoàn thành KTP 68%, Block B Q3 xuất sắc",
+                            tone: "green",
+                          },
+                          {
+                            id: "a-2",
+                            timestamp: "01/03/2025 09:15",
+                            by: "Trần Minh Tuấn",
+                            role: "Manager",
+                            title: "Cập nhật Assessment 2024-Annual",
+                            details: (
+                              <div className="text-[13px] text-[#374151]">
+                                Overall: <span className="font-semibold">88</span>{" "}
+                                <span className="text-[#6B7280]">→</span>{" "}
+                                <span className="font-semibold">91</span>
+                              </div>
+                            ),
+                            reason: "Điều chỉnh sau calibration session Q1",
+                            tone: "green",
+                          },
+                          {
+                            id: "a-3",
+                            timestamp: "15/12/2024 16:00",
+                            by: "Hệ thống",
+                            role: "Auto-computed",
+                            title: "Risk factor tự động: RF001",
+                            details: (
+                              <div className="text-[13px] text-[#374151]">
+                                “Chưa thăng chức 4 năm” được gán tự động
+                                <div className="mt-1 text-[12px] text-[#6B7280]">
+                                  Nguồn: system_computed từ last_promoted_at
+                                </div>
+                              </div>
+                            ),
+                            reason: "Tự động phát hiện risk factor từ dữ liệu nhân sự",
+                            tone: "amber",
+                          },
+                          {
+                            id: "a-4",
+                            timestamp: "20/06/2024 10:30",
+                            by: "Nguyễn Văn Đức",
+                            role: "Manager",
+                            title: "IDP được phê duyệt",
+                            details: (
+                              <div className="text-[13px] text-[#374151]">
+                                Trạng thái: <span className="font-semibold">draft</span>{" "}
+                                <span className="text-[#6B7280]">→</span>{" "}
+                                <span className="font-semibold">active</span>
+                              </div>
+                            ),
+                            reason: "Mục tiêu rõ ràng, phù hợp lộ trình kế thừa",
+                            tone: "green",
+                          },
+                        ] as AuditEntry[]
+                      ).map((e) => {
+                        const dot = auditDot(e.tone);
+                        return (
+                          <div key={e.id} className="relative pl-8">
+                            <div className="absolute left-3 top-2 bottom-0 w-px bg-[#E5E7EB]" />
+                            <div
+                              className={[
+                                "absolute left-[9px] top-2 h-3 w-3 rounded-full",
+                                dot.dot,
+                                "ring-4",
+                                dot.ring,
+                              ].join(" ")}
+                            />
+
+                            <div className="rounded-xl border border-[#E5E7EB] bg-white p-4">
+                              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="text-[13px] font-semibold text-[#111827] tabular-nums">
+                                  [{e.timestamp}] {e.by} ·{" "}
+                                  <span className="text-[#6B7280] font-medium">{e.role}</span>
+                                </div>
+                              </div>
+                              <div className="mt-2 text-[14px] font-semibold text-[#374151]">
+                                {e.title}
+                              </div>
+                              <div className="mt-2">{e.details}</div>
+                              <div className="mt-3 rounded-lg bg-[#F9FAFB] px-3 py-2 text-[13px] text-[#374151]">
+                                <span className="font-semibold">Lý do:</span>{" "}
+                                “{e.reason}”
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
           </div>
 
           {/* RIGHT 35% */}

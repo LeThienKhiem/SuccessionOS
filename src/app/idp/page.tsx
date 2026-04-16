@@ -2,12 +2,12 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { AlertCircle, ChevronDown, Clock, Search, Target } from "lucide-react";
+import { AlertCircle, ChevronDown, Clock, Plus, Search, Send, Target, X, Zap } from "lucide-react";
 
 import { employees } from "@/data/employees";
 import { positions } from "@/data/positions";
 import { idps } from "@/data/succession";
-import { getScoreColor, getTierColor, getTierLabel } from "@/data/assessments";
+import { getScoreColor, getTierLabel } from "@/data/assessments";
 
 import { EmployeeAvatar } from "@/components/EmployeeAvatar";
 import { ReadinessBadge } from "@/components/ReadinessBadge";
@@ -26,6 +26,28 @@ import { ScoreBar } from "@/components/ScoreBar";
 type StatusFilter = "all" | "active" | "review" | "completed" | "not-started";
 type TierFilter = "all" | "core" | "potential" | "successor";
 type SortBy = "progress_asc" | "progress_desc" | "name_asc" | "deadline_asc";
+type DevTab = "70" | "20" | "10";
+
+type StretchType = "stretch" | "rotation" | "shadowing";
+type StretchStatus = "not-started" | "in-progress" | "completed";
+type StretchTask = {
+  id: string;
+  title: string;
+  type: StretchType;
+  deadline: string;
+  progress: number;
+  status: StretchStatus;
+  description?: string;
+  competencyGoal?: string;
+};
+
+type MentorSession = {
+  id: string;
+  date: string;
+  topic: string;
+  durationMin: number;
+  outcome: string;
+};
 
 function statusLabel(status: string) {
   return status === "active"
@@ -81,12 +103,111 @@ function statusDotColor(status: string) {
   return "#9CA3AF";
 }
 
+function stretchStatusLabel(s: StretchStatus) {
+  if (s === "completed") return "Hoàn thành";
+  if (s === "in-progress") return "Đang thực hiện";
+  return "Chưa bắt đầu";
+}
+
+function humanDeadline(iso: string) {
+  if (/^\\d{4}-\\d{2}-\\d{2}$/.test(iso)) {
+    const [y, m, d] = iso.split("-");
+    return `${d}/${m}/${y}`;
+  }
+  return iso;
+}
+
 export default function IDPPage() {
   const [query, setQuery] = React.useState("");
   const [status, setStatus] = React.useState<StatusFilter>("all");
   const [tier, setTier] = React.useState<TierFilter>("all");
   const [sortBy, setSortBy] = React.useState<SortBy>("progress_asc");
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
+  const [devTabByEmp, setDevTabByEmp] = React.useState<Record<string, DevTab>>({});
+
+  const [toast, setToast] = React.useState<null | { text: string }>(null);
+  const showToast = React.useCallback((text: string) => {
+    setToast({ text });
+    window.setTimeout(() => setToast(null), 3000);
+  }, []);
+
+  const [stretchModal, setStretchModal] = React.useState<{
+    open: boolean;
+    employeeId: string | null;
+  }>({ open: false, employeeId: null });
+
+  const [approvalModal, setApprovalModal] = React.useState<{
+    open: boolean;
+    employeeId: string | null;
+  }>({ open: false, employeeId: null });
+
+  const [stretchTasks, setStretchTasks] = React.useState<Record<string, StretchTask[]>>({
+    "emp-019": [
+      {
+        id: "st-1",
+        title: "Dẫn dắt đàm phán hợp đồng Block B ($5M)",
+        type: "stretch",
+        deadline: "2025-06-30",
+        progress: 45,
+        status: "in-progress",
+        description: "Chuẩn bị agenda, dẫn dắt 2 phiên họp với vendor, chốt điều khoản chính.",
+        competencyGoal: "Contract negotiation, stakeholder management",
+      },
+      {
+        id: "st-2",
+        title: "Acting Project Director 2 tuần khi NVĐ đi công tác",
+        type: "rotation",
+        deadline: "2025-07-15",
+        progress: 0,
+        status: "not-started",
+        description: "Chịu trách nhiệm điều phối họp daily, escalation và báo cáo tuần.",
+        competencyGoal: "Leadership under pressure, decision making",
+      },
+    ],
+    "emp-010": [
+      {
+        id: "st-3",
+        title: "Shadow client negotiation session (PVN) — 3 buổi",
+        type: "shadowing",
+        deadline: "2025-05-25",
+        progress: 20,
+        status: "in-progress",
+        description: "Quan sát + ghi lại framework đàm phán; trình bày lại bài học.",
+        competencyGoal: "Negotiation framework, communication",
+      },
+    ],
+  });
+
+  const mentoringSessions = React.useMemo<Record<string, MentorSession[]>>(
+    () => ({
+      "emp-019": [
+        {
+          id: "ms-1",
+          date: "15/03/2025",
+          topic: "Contract negotiation strategy",
+          durationMin: 90,
+          outcome: "Nắm được framework đàm phán và cách chuẩn bị BATNA",
+        },
+        {
+          id: "ms-2",
+          date: "02/04/2025",
+          topic: "Escalation & stakeholder mapping",
+          durationMin: 60,
+          outcome: "Tự lập stakeholder map cho Block B và đề xuất 3 phương án escalation",
+        },
+      ],
+      "emp-020": [
+        {
+          id: "ms-3",
+          date: "10/02/2025",
+          topic: "Multi-discipline team leadership",
+          durationMin: 75,
+          outcome: "Xác định 2 action để cải thiện phối hợp giữa Structural và Piping",
+        },
+      ],
+    }),
+    []
+  );
 
   const stats = React.useMemo(() => {
     const active = employees.filter((e) => e.idpStatus === "active").length;
@@ -124,13 +245,16 @@ export default function IDPPage() {
     });
 
     return list;
-  }, [query, status, tier, sortBy, positionTitleById]);
+  }, [query, status, tier, sortBy]);
 
   const toggleExpand = (id: string) => {
     setExpanded((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
-      else next.add(id);
+      else {
+        next.add(id);
+        setDevTabByEmp((tabs) => (tabs[id] ? tabs : { ...tabs, [id]: "70" }));
+      }
       return next;
     });
   };
@@ -472,55 +596,233 @@ export default function IDPPage() {
 
                                 <div>
                                   <div className="flex items-center justify-between gap-3">
-                                    <div className="text-[14px] font-semibold text-[#374151]">
-                                      Hoạt động phát triển
+                                    <div className="flex items-center gap-2 text-[14px] font-semibold text-[#374151]">
+                                      <div className="h-8 w-8 rounded-lg bg-[#FFFBEB] border border-[#FDE68A] grid place-items-center">
+                                        <Zap className="h-4 w-4 text-[#F59E0B]" />
+                                      </div>
+                                      Giao việc thử thách (70-20-10)
                                     </div>
                                     <span className="rounded-full bg-white px-3 py-1 text-[12px] font-semibold text-[#6B7280] border border-[#E5E7EB]">
                                       {completedCount}/{totalCount} hoàn thành
                                     </span>
                                   </div>
 
-                                  <div className="mt-3 space-y-2">
-                                    {idp.activities.map((a) => {
-                                      const t = activityTypeBadge(a.type);
+                                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                                    {(
+                                      [
+                                        { key: "70", label: "70% Thực tế" },
+                                        { key: "20", label: "20% Kèm cặp" },
+                                        { key: "10", label: "10% Đào tạo" },
+                                      ] as const
+                                    ).map((t) => {
+                                      const active = (devTabByEmp[emp.id] ?? "70") === t.key;
                                       return (
-                                        <div
-                                          key={a.id}
-                                          className="flex items-center gap-3 border-b border-dashed border-[#E5E7EB] py-2"
+                                        <button
+                                          key={t.key}
+                                          type="button"
+                                          onClick={() =>
+                                            setDevTabByEmp((prev) => ({ ...prev, [emp.id]: t.key }))
+                                          }
+                                          className={[
+                                            "rounded-full px-3 py-1.5 text-[12px] font-semibold border transition",
+                                            active
+                                              ? "border-[#A5B4FC] bg-[#EEF2FF] text-[#4F46E5]"
+                                              : "border-[#E5E7EB] bg-white text-[#374151] hover:bg-[#F9FAFB]",
+                                          ].join(" ")}
                                         >
-                                          <span className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${t.className}`}>
-                                            {t.label}
-                                          </span>
-                                          <div className="min-w-0 flex-1">
-                                            <div className="truncate text-[13px] font-medium text-[#111827]">
-                                              {a.title}
-                                            </div>
-                                            <div className="text-[12px] text-[#6B7280]">
-                                              {a.targetDate}
-                                            </div>
-                                          </div>
-                                          <div className="w-[80px]">
-                                            <ScoreBar value={a.progress} size="sm" showNumber={false} />
-                                          </div>
-                                          <span
-                                            className="h-2 w-2 rounded-full"
-                                            style={{ background: statusDotColor(a.status) }}
-                                          />
-                                        </div>
+                                          {t.label}
+                                        </button>
                                       );
                                     })}
                                   </div>
+
+                                  {(devTabByEmp[emp.id] ?? "70") === "70" ? (
+                                    <div className="mt-4">
+                                      <div className="space-y-2">
+                                        {(stretchTasks[emp.id] ?? []).length === 0 ? (
+                                          <div className="rounded-lg border border-dashed border-[#E5E7EB] bg-white px-4 py-4 text-[13px] text-[#6B7280]">
+                                            Chưa có nhiệm vụ thử thách. Thêm nhiệm vụ để tạo trải nghiệm 70-20-10.
+                                          </div>
+                                        ) : (
+                                          (stretchTasks[emp.id] ?? []).map((t) => {
+                                            const badge = activityTypeBadge(t.type);
+                                            return (
+                                              <div
+                                                key={t.id}
+                                                className="rounded-lg border border-[#E5E7EB] bg-white px-4 py-3"
+                                              >
+                                                <div className="flex items-start justify-between gap-3">
+                                                  <div className="min-w-0">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                      <span
+                                                        className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${badge.className}`}
+                                                      >
+                                                        {badge.label}
+                                                      </span>
+                                                      <div className="truncate text-[13px] font-semibold text-[#111827]">
+                                                        {t.title}
+                                                      </div>
+                                                    </div>
+                                                    <div className="mt-1 text-[12px] text-[#6B7280]">
+                                                      Loại: {t.type} · Deadline: {humanDeadline(t.deadline)} · Progress:{" "}
+                                                      <span className="font-semibold text-[#111827]">
+                                                        {t.progress}%
+                                                      </span>{" "}
+                                                      · Status: {stretchStatusLabel(t.status)}
+                                                    </div>
+                                                  </div>
+                                                  <div className="shrink-0 flex items-center gap-2">
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => showToast("Xem chi tiết (mock)")}
+                                                      className="h-8 rounded-lg border border-[#E5E7EB] bg-white px-3 text-[13px] font-semibold text-[#374151] hover:bg-[#F9FAFB]"
+                                                    >
+                                                      Xem chi tiết
+                                                    </button>
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => showToast("Cập nhật tiến độ (mock)")}
+                                                      className="h-8 rounded-lg bg-[#4F46E5] px-3 text-[13px] font-semibold text-white"
+                                                    >
+                                                      Cập nhật tiến độ
+                                                    </button>
+                                                  </div>
+                                                </div>
+
+                                                <div className="mt-3 flex items-center gap-3">
+                                                  <div className="flex-1">
+                                                    <ScoreBar value={t.progress} size="sm" showNumber={false} />
+                                                  </div>
+                                                  <span
+                                                    className="h-2 w-2 rounded-full"
+                                                    style={{ background: statusDotColor(t.status) }}
+                                                  />
+                                                </div>
+                                              </div>
+                                            );
+                                          })
+                                        )}
+                                      </div>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => setStretchModal({ open: true, employeeId: emp.id })}
+                                        className="mt-3 inline-flex items-center gap-2 rounded-lg bg-[#4F46E5] px-3 py-2 text-[13px] font-semibold text-white"
+                                      >
+                                        <Plus className="h-4 w-4" />
+                                        + Thêm nhiệm vụ thử thách
+                                      </button>
+                                    </div>
+                                  ) : (devTabByEmp[emp.id] ?? "70") === "20" ? (
+                                    <div className="mt-4 space-y-2">
+                                      {(mentoringSessions[emp.id] ?? []).length === 0 ? (
+                                        <div className="rounded-lg border border-dashed border-[#E5E7EB] bg-white px-4 py-4 text-[13px] text-[#6B7280]">
+                                          Chưa có buổi kèm cặp nào.
+                                        </div>
+                                      ) : (
+                                        (mentoringSessions[emp.id] ?? []).map((s) => (
+                                          <div
+                                            key={s.id}
+                                            className="rounded-lg border border-[#E5E7EB] bg-white px-4 py-3"
+                                          >
+                                            <div className="flex items-start justify-between gap-3">
+                                              <div className="min-w-0">
+                                                <div className="text-[13px] font-semibold text-[#111827]">
+                                                  Buổi mentoring — {s.date}
+                                                </div>
+                                                <div className="mt-1 text-[12px] text-[#6B7280]">
+                                                  Chủ đề: {s.topic} · Thời lượng: {s.durationMin} phút
+                                                </div>
+                                                <div className="mt-2 text-[13px] text-[#374151]">
+                                                  Kết quả: {s.outcome}
+                                                </div>
+                                              </div>
+                                              <button
+                                                type="button"
+                                                onClick={() => showToast("Thêm buổi kèm cặp (mock)")}
+                                                className="h-8 shrink-0 rounded-lg border border-[#E5E7EB] bg-white px-3 text-[13px] font-semibold text-[#374151] hover:bg-[#F9FAFB]"
+                                              >
+                                                Thêm buổi kèm cặp
+                                              </button>
+                                            </div>
+                                          </div>
+                                        ))
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div className="mt-4">
+                                      <div className="flex items-center justify-between gap-3">
+                                        <div className="text-[13px] font-semibold text-[#374151]">
+                                          10% Đào tạo (Formal)
+                                        </div>
+                                        <span className="rounded-full bg-white px-3 py-1 text-[12px] font-semibold text-[#6B7280] border border-[#E5E7EB]">
+                                          {completedCount}/{totalCount} hoàn thành
+                                        </span>
+                                      </div>
+
+                                      <div className="mt-3 space-y-2">
+                                        {idp.activities.map((a) => {
+                                          const t = activityTypeBadge(a.type);
+                                          return (
+                                            <div
+                                              key={a.id}
+                                              className="flex items-center gap-3 border-b border-dashed border-[#E5E7EB] py-2"
+                                            >
+                                              <span
+                                                className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${t.className}`}
+                                              >
+                                                {t.label}
+                                              </span>
+                                              <div className="min-w-0 flex-1">
+                                                <div className="truncate text-[13px] font-medium text-[#111827]">
+                                                  {a.title}
+                                                </div>
+                                                <div className="text-[12px] text-[#6B7280]">{a.targetDate}</div>
+                                              </div>
+                                              <div className="w-[80px]">
+                                                <ScoreBar value={a.progress} size="sm" showNumber={false} />
+                                              </div>
+                                              <span
+                                                className="h-2 w-2 rounded-full"
+                                                style={{ background: statusDotColor(a.status) }}
+                                              />
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  )}
 
                                   <div className="mt-4 flex items-center justify-between gap-3">
                                     <div className="text-[13px] text-[#6B7280]">
                                       Duyệt bởi {idp.approvedBy} · Tạo {idp.createdDate}
                                     </div>
-                                    <Link
-                                      href={`/talent/${emp.id}`}
-                                      className="text-[13px] font-semibold text-[#4F46E5] hover:underline"
-                                    >
-                                      Xem IDP đầy đủ →
-                                    </Link>
+                                    <div className="flex items-center gap-3">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          showToast("Đã lưu nháp · Có thể tiếp tục chỉnh sửa")
+                                        }
+                                        className="h-8 rounded-lg border border-[#E5E7EB] bg-white px-3 text-[13px] font-semibold text-[#374151] hover:bg-[#F9FAFB]"
+                                      >
+                                        Lưu nháp
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setApprovalModal({ open: true, employeeId: emp.id })
+                                        }
+                                        className="h-8 rounded-lg bg-[#4F46E5] px-3 text-[13px] font-semibold text-white"
+                                      >
+                                        Gửi phê duyệt
+                                      </button>
+                                      <Link
+                                        href={`/talent/${emp.id}`}
+                                        className="text-[13px] font-semibold text-[#4F46E5] hover:underline"
+                                      >
+                                        Xem IDP đầy đủ →
+                                      </Link>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
@@ -626,6 +928,301 @@ export default function IDPPage() {
           </Table>
         </div>
       )}
+
+      <StretchTaskModal
+        open={stretchModal.open}
+        employeeId={stretchModal.employeeId}
+        onClose={() => setStretchModal({ open: false, employeeId: null })}
+        onAdd={(employeeId, task) => {
+          setStretchTasks((prev) => ({
+            ...prev,
+            [employeeId]: [task, ...(prev[employeeId] ?? [])],
+          }));
+          showToast("Đã thêm nhiệm vụ thử thách");
+        }}
+      />
+
+      <ApprovalWorkflowModal
+        open={approvalModal.open}
+        employeeId={approvalModal.employeeId}
+        onClose={() => setApprovalModal({ open: false, employeeId: null })}
+        onSaveDraft={() => showToast("Đã lưu nháp · Có thể tiếp tục chỉnh sửa")}
+        onSubmit={() => {
+          showToast("IDP đã gửi phê duyệt · Chờ xác nhận từ Trần Minh Tuấn");
+          setApprovalModal({ open: false, employeeId: null });
+        }}
+      />
+
+      {toast ? (
+        <div className="fixed bottom-5 right-5 z-[60] rounded-lg bg-[#111827] px-5 py-3 text-[14px] text-white shadow-[0_10px_24px_rgba(0,0,0,0.25)]">
+          {toast.text}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ApprovalWorkflowModal(props: {
+  open: boolean;
+  employeeId: string | null;
+  onClose: () => void;
+  onSaveDraft: () => void;
+  onSubmit: () => void;
+}) {
+  const { open, onClose, onSaveDraft, onSubmit } = props;
+  const [note, setNote] = React.useState("");
+  const [consent, setConsent] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!open) return;
+    setNote("");
+    setConsent(false);
+  }, [open]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="w-full max-w-xl overflow-hidden rounded-xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-[#E5E7EB] px-5 py-4">
+          <div className="text-[16px] font-bold text-[#111827]">Quy trình phê duyệt</div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="grid h-9 w-9 place-items-center rounded-lg border border-[#E5E7EB] bg-white text-[#6B7280] hover:text-[#111827]"
+            aria-label="Đóng"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* Stepper */}
+          <div className="rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-4">
+            <div className="text-[13px] font-semibold text-[#374151]">Quy trình</div>
+            <div className="mt-3 space-y-3">
+              {[
+                { t: "Nhân viên gửi", s: "done", meta: "✅ Hoàn thành · 18/04/2025" },
+                { t: "Manager trực tiếp", s: "pending", meta: "⏳ Đang chờ · TMT" },
+                { t: "Trưởng phòng TCNS", s: "blocked", meta: "⏳ Chờ bước trước" },
+                { t: "Ban PTNT phê duyệt", s: "blocked", meta: "⏳ Chờ bước trước" },
+                { t: "Giám đốc ký duyệt", s: "blocked", meta: "⏳ Chờ bước trước" },
+              ].map((step, idx, arr) => (
+                <div key={step.t} className="relative pl-8">
+                  {idx !== arr.length - 1 ? (
+                    <div className="absolute left-[13px] top-[18px] h-[calc(100%-6px)] w-px bg-[#E5E7EB]" />
+                  ) : null}
+                  <div
+                    className={[
+                      "absolute left-[9px] top-[6px] h-3 w-3 rounded-full",
+                      step.s === "done"
+                        ? "bg-[#22C55E]"
+                        : step.s === "pending"
+                          ? "bg-[#F59E0B]"
+                          : "bg-[#D1D5DB]",
+                    ].join(" ")}
+                  />
+
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="text-[13px] font-semibold text-[#111827]">{step.t}</div>
+                    <div className="text-[12px] text-[#6B7280]">{step.meta}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 text-[13px] text-[#374151]">
+              <div>
+                Người duyệt tiếp:{" "}
+                <span className="font-semibold text-[#111827]">Trần Minh Tuấn</span>{" "}
+                <span className="text-[#6B7280]">(Manager)</span>
+              </div>
+              <div>
+                Deadline:{" "}
+                <span className="font-semibold text-[#111827]">25/04/2025</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Note */}
+          <div className="space-y-2">
+            <div className="text-[13px] font-semibold text-[#374151]">Ghi chú gửi kèm:</div>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Nhập ghi chú cho người duyệt..."
+              className="min-h-[90px] w-full rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-[13px] outline-none focus:border-[#6366F1]"
+            />
+          </div>
+
+          {/* Consent */}
+          <label className="flex items-start gap-3 rounded-xl border border-[#E5E7EB] bg-white px-4 py-3">
+            <input
+              type="checkbox"
+              checked={consent}
+              onChange={(e) => setConsent(e.target.checked)}
+              className="mt-1 h-4 w-4 rounded border-[#D1D5DB] accent-[#4F46E5]"
+            />
+            <div className="text-[13px] text-[#374151] leading-5">
+              Tôi xác nhận đã đọc và đồng ý với điều khoản xử lý dữ liệu cá nhân theo Điều 21
+            </div>
+          </label>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t border-[#E5E7EB] px-5 py-4">
+          <button
+            type="button"
+            onClick={onSaveDraft}
+            className="h-9 rounded-lg border border-[#E5E7EB] bg-white px-3 text-[13px] font-semibold text-[#374151] hover:bg-[#F9FAFB]"
+          >
+            Lưu nháp
+          </button>
+          <button
+            type="button"
+            disabled={!consent}
+            onClick={onSubmit}
+            className="inline-flex items-center gap-2 h-9 rounded-lg bg-[#4F46E5] px-3 text-[13px] font-semibold text-white disabled:opacity-40"
+          >
+            <Send className="h-4 w-4" />
+            Gửi phê duyệt
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StretchTaskModal(props: {
+  open: boolean;
+  employeeId: string | null;
+  onClose: () => void;
+  onAdd: (employeeId: string, task: StretchTask) => void;
+}) {
+  const { open, employeeId, onClose, onAdd } = props;
+
+  const [title, setTitle] = React.useState("");
+  const [type, setType] = React.useState<StretchType>("stretch");
+  const [deadline, setDeadline] = React.useState("2025-06-30");
+  const [desc, setDesc] = React.useState("");
+  const [goal, setGoal] = React.useState("");
+
+  React.useEffect(() => {
+    if (!open) return;
+    setTitle("");
+    setType("stretch");
+    setDeadline("2025-06-30");
+    setDesc("");
+    setGoal("");
+  }, [open, employeeId]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="w-full max-w-lg rounded-xl bg-white shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between border-b border-[#E5E7EB] p-5">
+          <div className="text-[16px] font-bold text-[#111827]">Thêm nhiệm vụ thử thách</div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="grid h-9 w-9 place-items-center rounded-lg border border-[#E5E7EB] bg-white text-[#6B7280] hover:text-[#111827]"
+            aria-label="Đóng"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div className="space-y-2">
+            <div className="text-[13px] font-semibold text-[#374151]">Tên nhiệm vụ</div>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="VD: Dẫn dắt đàm phán hợp đồng Block B ($5M)"
+              className="h-10 w-full rounded-lg border border-[#E5E7EB] bg-white px-3 text-[13px] outline-none focus:border-[#6366F1]"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="space-y-2">
+              <div className="text-[13px] font-semibold text-[#374151]">Loại</div>
+              <select
+                value={type}
+                onChange={(e) => setType(e.target.value as StretchType)}
+                className="h-10 w-full rounded-lg border border-[#E5E7EB] bg-white px-3 text-[13px] outline-none focus:border-[#6366F1]"
+              >
+                <option value="stretch">stretch</option>
+                <option value="rotation">rotation</option>
+                <option value="shadowing">shadowing</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <div className="text-[13px] font-semibold text-[#374151]">Deadline</div>
+              <input
+                type="date"
+                value={deadline}
+                onChange={(e) => setDeadline(e.target.value)}
+                className="h-10 w-full rounded-lg border border-[#E5E7EB] bg-white px-3 text-[13px] outline-none focus:border-[#6366F1]"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="text-[13px] font-semibold text-[#374151]">Mô tả</div>
+            <textarea
+              value={desc}
+              onChange={(e) => setDesc(e.target.value)}
+              placeholder="Mô tả ngắn về nhiệm vụ, deliverables..."
+              className="min-h-[90px] w-full rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-[13px] outline-none focus:border-[#6366F1]"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <div className="text-[13px] font-semibold text-[#374151]">Mục tiêu năng lực cần đạt</div>
+            <textarea
+              value={goal}
+              onChange={(e) => setGoal(e.target.value)}
+              placeholder="VD: Contract negotiation, leadership under pressure..."
+              className="min-h-[70px] w-full rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-[13px] outline-none focus:border-[#6366F1]"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-3 border-t border-[#E5E7EB] p-5">
+          <div className="text-[12px] text-[#6B7280]">Prototype demo — task lưu trong session</div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="h-9 rounded-lg border border-[#E5E7EB] bg-white px-3 text-[13px] font-semibold text-[#374151]"
+            >
+              Hủy
+            </button>
+            <button
+              type="button"
+              disabled={!employeeId || title.trim().length === 0}
+              onClick={() => {
+                if (!employeeId) return;
+                const task: StretchTask = {
+                  id: `st-${Math.random().toString(16).slice(2, 8)}`,
+                  title: title.trim(),
+                  type,
+                  deadline,
+                  progress: 0,
+                  status: "not-started",
+                  description: desc.trim() || undefined,
+                  competencyGoal: goal.trim() || undefined,
+                };
+                onAdd(employeeId, task);
+                onClose();
+              }}
+              className="h-9 rounded-lg bg-[#4F46E5] px-3 text-[13px] font-semibold text-white disabled:opacity-40"
+            >
+              Thêm nhiệm vụ
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
