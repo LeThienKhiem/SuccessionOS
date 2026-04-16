@@ -307,7 +307,11 @@ export default function Home() {
             const tone = headerTone(best?.readiness ?? null);
 
             return (
-              <div key={pos.id} className="rounded-xl border border-[#E5E7EB] bg-white overflow-hidden">
+              <Link
+                key={pos.id}
+                href={`/succession?tab=byPosition&position=${pos.id}`}
+                className="rounded-xl border border-[#E5E7EB] bg-white overflow-hidden hover:border-[#C7D2FE] hover:shadow-[0_6px_18px_rgba(79,70,229,0.10)] transition block"
+              >
                 <div className={`border-t-4 ${tone.top} ${tone.bg} px-4 py-3`}>
                   <div className="flex items-center justify-between gap-3">
                     <div className="inline-flex items-center gap-2">
@@ -358,7 +362,7 @@ export default function Home() {
                     )}
                   </div>
                 </div>
-              </div>
+              </Link>
             );
           })}
         </div>
