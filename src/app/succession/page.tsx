@@ -4,14 +4,13 @@ import * as React from "react";
 import Link from "next/link";
 import {
   AlertCircle,
-  CheckCircle,
   Cpu,
   GitBranch,
   GitMerge,
   LayoutGrid,
   Search,
+  Sparkles,
   Star,
-  TrendingUp,
   ChevronDown,
   UserCheck,
   X,
@@ -25,14 +24,17 @@ import { getNineBoxQuadrant, getTierLabel } from "@/data/assessments";
 import { EmployeeAvatar } from "@/components/EmployeeAvatar";
 import { KnowledgeTransferPanel } from "@/components/KnowledgeTransferPanel";
 import { ReadinessBadge } from "@/components/ReadinessBadge";
+import { TierBadge } from "@/components/TierBadge";
 import { Button } from "@/components/ui/button";
 import type { Employee } from "@/data/types";
 
 type Tab = "matrix" | "byPosition";
 
-function readinessRank(r: string) {
-  return r === "now" ? 3 : r === "1-2yr" ? 2 : r === "3-5yr" ? 1 : 0;
-}
+type AiSuggestion = {
+  employeeId: string;
+  fitScore: number;
+  reason: string;
+};
 
 function requiredOverallScoreForPosition(level: string) {
   // Prototype heuristic: map role level -> target overall score threshold (0–100)
@@ -40,21 +42,6 @@ function requiredOverallScoreForPosition(level: string) {
   if (level === "manager") return 85;
   if (level === "lead") return 80;
   return 75;
-}
-
-function bestCandidate(positionId: string) {
-  const entry = successionMap.find((s) => s.positionId === positionId);
-  if (!entry || entry.candidates.length === 0) return null;
-  return [...entry.candidates].sort(
-    (a, b) => readinessRank(b.readiness) - readinessRank(a.readiness)
-  )[0];
-}
-
-function indicatorColor(readiness: string | null) {
-  if (readiness === "now") return "bg-[#22C55E]";
-  if (readiness === "1-2yr") return "bg-[#F59E0B]";
-  if (readiness === "3-5yr") return "bg-[#F97316]";
-  return "bg-[#EF4444]";
 }
 
 function tierAvatarStyle(tier: string) {
@@ -68,6 +55,510 @@ function computeFitScore(e: Employee): number {
   if (e.riskScore > 50) base -= 10;
   if (e.idpStatus === "active") base += 5;
   return Math.max(0, Math.min(100, base));
+}
+
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
+
+function requiredOverallByLevel(level: string) {
+  if (level === "director") return 90;
+  if (level === "manager") return 85;
+  if (level === "lead") return 80;
+  return 75;
+}
+
+function computeFitScoreForPosition(level: string, emp: Employee) {
+  const required = requiredOverallByLevel(level);
+  const gapPenalty = Math.max(0, required - emp.overallScore) * 0.8; // demo heuristic (same as /positions)
+  const idpBonus = emp.idpStatus === "active" ? 5 : 0;
+  const riskPenalty =
+    emp.riskScore >= 60 ? 12 : emp.riskScore >= 40 ? 8 : emp.riskScore >= 30 ? 5 : 2;
+  return clamp(Math.round(emp.overallScore - gapPenalty + idpBonus - riskPenalty), 0, 100);
+}
+
+function mergedCandidatesForPosition(
+  positionId: string,
+  manualSuccessors: Record<string, string[]>
+) {
+  const pos = positions.find((p) => p.id === positionId) ?? positions[0];
+  const selectedEntry = successionMap.find((s) => s.positionId === positionId);
+  const originalCandidates = selectedEntry?.candidates ?? [];
+  const addedIds = manualSuccessors[positionId] ?? [];
+  const requiredOverall = requiredOverallScoreForPosition(pos.level);
+  const addedCandidates = employees
+    .filter((e) => addedIds.includes(e.id))
+    .map((e) => {
+      const gap = requiredOverall - e.overallScore;
+      return {
+        employeeId: e.id,
+        readiness: e.readiness ?? "3-5yr",
+        gapScore: gap,
+        strengths: [] as string[],
+        developmentNeeds: [] as string[],
+        nominatedDate: "—",
+        nominatedBy: "Thêm thủ công",
+        isManuallyAdded: true as const,
+      };
+    });
+
+  return [
+    ...originalCandidates.map((c) => ({ ...c, isManuallyAdded: false as const })),
+    ...addedCandidates,
+  ];
+}
+
+function positionListMeta(positionId: string, manualSuccessors: Record<string, string[]>) {
+  const list = mergedCandidatesForPosition(positionId, manualSuccessors);
+  const count = list.length;
+  const nowCount = list.filter((c) => c.readiness === "now").length;
+
+  let dot = "#EF4444";
+  if (count > 0 && nowCount < 2) dot = "#F59E0B";
+  if (nowCount >= 2) dot = "#22C55E";
+
+  let badge: { text: string; bg: string; textColor: string };
+  if (count === 0) badge = { text: "0", bg: "#FEF2F2", textColor: "#EF4444" };
+  else if (count === 1) badge = { text: "1", bg: "#FEF9C3", textColor: "#D97706" };
+  else badge = { text: "2+", bg: "#F0FDF4", textColor: "#16A34A" };
+
+  return { count, nowCount, dot, badge, subtitle: count === 0 ? "Chưa có ứng viên" : `${count} ứng viên` };
+}
+
+function hashHue(id: string) {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return h % 360;
+}
+
+function avatarGradient(id: string) {
+  const h1 = hashHue(id);
+  const h2 = (h1 + 42) % 360;
+  return `linear-gradient(135deg, hsl(${h1} 85% 55%), hsl(${h2} 85% 45%))`;
+}
+
+function fitPctFromGap(gapScore: number) {
+  return Math.max(0, Math.min(100, 100 - gapScore));
+}
+
+function fitBarGradient(pct: number) {
+  if (pct >= 90) return "linear-gradient(90deg,#4ADE80,#22C55E)";
+  if (pct >= 70) return "linear-gradient(90deg,#86EFAC,#4ADE80)";
+  if (pct >= 50) return "linear-gradient(90deg,#FCD34D,#FBBF24)";
+  return "linear-gradient(90deg,#FCA5A5,#F87171)";
+}
+
+function PositionList(props: {
+  positions: typeof positions;
+  selectedPositionId: string;
+  onSelect: (id: string) => void;
+  manualSuccessors: Record<string, string[]>;
+}) {
+  return (
+    <div
+      style={{
+        background: "#ffffff",
+        borderRight: "1px solid #E5E7EB",
+        overflowY: "auto",
+        minHeight: 0,
+        flex: "1 1 0%",
+        WebkitOverflowScrolling: "touch",
+      }}
+    >
+      <div style={{ padding: "16px", borderBottom: "1px solid #E5E7EB" }}>
+        <div style={{ fontSize: "12px", color: "#6B7280", fontWeight: 600, textTransform: "uppercase" }}>
+          12 Vị trí Then chốt
+        </div>
+      </div>
+
+      <div>
+        {props.positions.map((p) => {
+          const meta = positionListMeta(p.id, props.manualSuccessors);
+          const active = p.id === props.selectedPositionId;
+          return (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => props.onSelect(p.id)}
+              style={{
+                width: "100%",
+                textAlign: "left",
+                padding: "14px 16px",
+                borderBottom: "1px solid #F3F4F6",
+                cursor: "pointer",
+                transition: "background 0.15s",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "12px",
+                background: active ? "#EEF2FF" : "transparent",
+                borderLeft: active ? "3px solid #6366F1" : "3px solid transparent",
+                paddingLeft: active ? "13px" : "16px",
+              }}
+              onMouseEnter={(e) => {
+                if (!active) (e.currentTarget.style.background = "#F9FAFB");
+              }}
+              onMouseLeave={(e) => {
+                if (!active) (e.currentTarget.style.background = "transparent");
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span
+                    style={{
+                      width: "8px",
+                      height: "8px",
+                      borderRadius: "999px",
+                      background: meta.dot,
+                      flexShrink: 0,
+                    }}
+                  />
+                  <div
+                    style={{
+                      fontSize: "13px",
+                      fontWeight: active ? 600 : 500,
+                      color: active ? "#4F46E5" : "#111827",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {p.titleVi}
+                  </div>
+                </div>
+                <div style={{ marginTop: "6px", paddingLeft: "16px", fontSize: "11px", color: "#6B7280" }}>
+                  {meta.subtitle}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  width: "28px",
+                  height: "28px",
+                  borderRadius: "999px",
+                  background: meta.badge.bg,
+                  color: meta.badge.textColor,
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  display: "grid",
+                  placeItems: "center",
+                  flexShrink: 0,
+                }}
+              >
+                {meta.badge.text}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function PositionDetail(props: {
+  selectedPosition: (typeof positions)[number];
+  candidates: ReturnType<typeof mergedCandidatesForPosition>;
+  currentHolder?: Employee;
+  onAddClick: () => void;
+  onAiSuggest: () => void;
+  openKtp: Record<string, boolean>;
+  setOpenKtp: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+  removeSuccessor: (positionId: string, employeeId: string) => void;
+}) {
+  const list = props.candidates;
+  const nowCount = list.filter((c) => c.readiness === "now").length;
+  const count = list.length;
+
+  const readinessPill =
+    count === 0
+      ? { text: "Chưa có kế thừa", bg: "#FEE2E2", color: "#991B1B" }
+      : nowCount >= 2
+        ? { text: "Sẵn sàng ngay", bg: "#DCFCE7", color: "#15803D" }
+        : { text: "Cần thêm thời gian", bg: "#FEF9C3", color: "#92400E" };
+
+  const riskForPosition = (() => {
+    const holder = props.currentHolder;
+    const emps = list
+      .map((c) => employees.find((e) => e.id === c.employeeId))
+      .filter(Boolean) as Employee[];
+    const pool = holder ? [holder, ...emps] : emps;
+    if (pool.length === 0) return { label: "—", color: "#6B7280" };
+    const worst = pool.reduce((a, b) => (a.riskScore >= b.riskScore ? a : b));
+    if (worst.riskLevel === "critical" || worst.riskLevel === "high")
+      return { label: "Cao", color: "#DC2626" };
+    if (worst.riskLevel === "medium") return { label: "Trung bình", color: "#D97706" };
+    return { label: "Thấp", color: "#15803D" };
+  })();
+
+  return (
+    <div
+      style={{
+        background: "#F9FAFB",
+        padding: "24px",
+        overflowY: "auto",
+        minHeight: 0,
+        flex: "1 1 0%",
+        WebkitOverflowScrolling: "touch",
+      }}
+    >
+      <div className="so-card" style={{ borderRadius: "12px", padding: "20px", marginBottom: "16px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "16px" }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: "20px", fontWeight: 700, color: "#111827" }}>{props.selectedPosition.titleVi}</div>
+            <div style={{ marginTop: "6px", fontSize: "13px", color: "#6B7280" }}>{props.selectedPosition.title}</div>
+          </div>
+          <div
+            style={{
+              alignSelf: "flex-start",
+              borderRadius: "999px",
+              padding: "6px 10px",
+              fontSize: "12px",
+              fontWeight: 700,
+              background: readinessPill.bg,
+              color: readinessPill.color,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {readinessPill.text}
+          </div>
+        </div>
+
+        <div style={{ marginTop: "12px", display: "flex", alignItems: "stretch", gap: "0" }}>
+          <div style={{ flex: 1, paddingRight: "16px" }}>
+            <div style={{ fontSize: "13px", color: "#6B7280" }}>Ứng viên kế thừa</div>
+            <div style={{ marginTop: "6px", fontSize: "20px", fontWeight: 800, color: "#4F46E5" }}>{count}</div>
+          </div>
+          <div style={{ width: "1px", background: "#E5E7EB" }} />
+          <div style={{ flex: 1, padding: "0 16px" }}>
+            <div style={{ fontSize: "13px", color: "#6B7280" }}>Sẵn sàng ngay</div>
+            <div style={{ marginTop: "6px", fontSize: "20px", fontWeight: 800, color: "#16A34A" }}>{nowCount}</div>
+          </div>
+          <div style={{ width: "1px", background: "#E5E7EB" }} />
+          <div style={{ flex: 1, paddingLeft: "16px" }}>
+            <div style={{ fontSize: "13px", color: "#6B7280" }}>Mức độ rủi ro</div>
+            <div style={{ marginTop: "6px", fontSize: "20px", fontWeight: 800, color: riskForPosition.color }}>
+              {riskForPosition.label}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+        <div style={{ fontSize: "14px", fontWeight: 700, color: "#111827" }}>Danh sách ứng viên kế thừa</div>
+        <button
+          type="button"
+          onClick={props.onAddClick}
+          style={{
+            border: "1px solid #E5E7EB",
+            background: "#fff",
+            borderRadius: "10px",
+            padding: "8px 10px",
+            fontSize: "12px",
+            fontWeight: 700,
+            color: "#374151",
+            cursor: "pointer",
+          }}
+        >
+          + Thêm ứng viên
+        </button>
+      </div>
+
+      <div style={{ marginTop: "12px" }}>
+        {count === 0 ? (
+          <div className="so-card" style={{ borderRadius: "12px", padding: "18px" }}>
+            <div style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
+              <div
+                style={{
+                  width: "40px",
+                  height: "40px",
+                  borderRadius: "12px",
+                  background: "#FFFBEB",
+                  display: "grid",
+                  placeItems: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <AlertCircle className="h-5 w-5 text-[#F59E0B]" />
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: "14px", fontWeight: 700, color: "#111827" }}>
+                  Vị trí này chưa có ứng viên kế thừa
+                </div>
+                <div style={{ marginTop: "6px", fontSize: "13px", color: "#6B7280" }}>
+                  Hãy dùng AI để gợi ý nhanh các profile phù hợp (prototype).
+                </div>
+                <button
+                  type="button"
+                  onClick={props.onAiSuggest}
+                  style={{
+                    marginTop: "12px",
+                    border: "1px solid #C7D2FE",
+                    background: "#EEF2FF",
+                    color: "#4F46E5",
+                    borderRadius: "10px",
+                    padding: "10px 12px",
+                    fontSize: "13px",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
+                  <Sparkles className="h-4 w-4" />
+                  Xem gợi ý AI
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          list.map((c, idx) => {
+            const emp = employees.find((e) => e.id === c.employeeId);
+            const pct = fitPctFromGap(c.gapScore);
+            const riskCls = emp ? riskRetentionBadge(emp.riskLevel) : { label: "—", className: "bg-[#F3F4F6] text-[#6B7280]" };
+
+            return (
+              <div
+                key={c.employeeId}
+                className="so-card"
+                style={{
+                  borderRadius: "12px",
+                  padding: "16px",
+                  marginBottom: "10px",
+                  transition: "border-color 0.15s",
+                }}
+                onMouseEnter={(e) => ((e.currentTarget as HTMLDivElement).style.borderColor = "#A5B4FC")}
+                onMouseLeave={(e) => ((e.currentTarget as HTMLDivElement).style.borderColor = "#E5E7EB")}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                  <div
+                    style={{
+                      width: "40px",
+                      height: "40px",
+                      borderRadius: "999px",
+                      background: avatarGradient(c.employeeId),
+                      display: "grid",
+                      placeItems: "center",
+                      color: "#fff",
+                      fontWeight: 800,
+                      fontSize: "12px",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {emp?.initials ?? "?"}
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "10px" }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                          <div style={{ fontSize: "14px", fontWeight: 600, color: "#111827" }}>
+                            {emp?.name ?? c.employeeId}
+                          </div>
+                          {c.isManuallyAdded ? (
+                            <button
+                              type="button"
+                              onClick={() => props.removeSuccessor(props.selectedPosition.id, c.employeeId)}
+                              style={{
+                                border: "none",
+                                background: "transparent",
+                                color: "#F87171",
+                                cursor: "pointer",
+                                padding: 0,
+                              }}
+                              aria-label="Gỡ"
+                              title="Gỡ"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          ) : null}
+                        </div>
+                        <div style={{ marginTop: "4px", fontSize: "12px", color: "#6B7280" }}>
+                          {emp?.currentRoleTitle ?? "—"}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: "12px", color: "#6B7280", flexShrink: 0 }}>#{idx + 1}</div>
+                    </div>
+
+                    <div style={{ marginTop: "10px", display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                      {emp ? <TierBadge tier={emp.tier} /> : null}
+                      <ReadinessBadge readiness={c.readiness} />
+                      <span className="inline-flex items-center rounded-full bg-[#EEF2FF] px-2 py-0.5 text-[11px] font-bold text-[#4F46E5]">
+                        Điểm: {emp?.overallScore ?? "—"}
+                      </span>
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-bold ${riskCls.className}`}>
+                        Rủi ro: {emp?.riskScore ?? "—"}
+                      </span>
+                    </div>
+
+                    {c.readiness === "now" || c.readiness === "1-2yr" ? (
+                      <div style={{ marginTop: "12px" }}>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            props.setOpenKtp((prev) => ({
+                              ...prev,
+                              [c.employeeId]: !prev[c.employeeId],
+                            }))
+                          }
+                          className="w-full flex items-center justify-between gap-3 rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 hover:bg-[#F9FAFB]"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <GitMerge className="h-4 w-4 text-[#4F46E5]" />
+                            <div className="text-[12px] font-semibold text-[#374151] truncate">
+                              Kế hoạch Chuyển giao Tri thức
+                            </div>
+                          </div>
+                          <ChevronDown
+                            className={[
+                              "h-4 w-4 text-[#6B7280] transition",
+                              props.openKtp[c.employeeId] ? "rotate-180" : "",
+                            ].join(" ")}
+                          />
+                        </button>
+                        {props.openKtp[c.employeeId] ? (
+                          <div className="mt-2">
+                            <KnowledgeTransferPanel
+                              positionId={props.selectedPosition.id}
+                              holderId={props.selectedPosition.currentHolderId}
+                              successorId={c.employeeId}
+                            />
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div style={{ width: "180px", flexShrink: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+                      <div style={{ fontSize: "11px", color: "#6B7280" }}>Mức độ phù hợp</div>
+                      <div style={{ fontSize: "12px", fontWeight: 800, color: "#111827" }}>{pct}%</div>
+                    </div>
+                    <div style={{ marginTop: "4px", height: "6px", borderRadius: "999px", background: "#F3F4F6" }}>
+                      <div
+                        style={{
+                          height: "6px",
+                          borderRadius: "999px",
+                          width: `${pct}%`,
+                          background: fitBarGradient(pct),
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: "12px", display: "flex", justifyContent: "flex-end" }}>
+                  <Button asChild variant="outline" className="h-8 rounded-lg px-3 whitespace-nowrap">
+                    <Link href={`/talent/${c.employeeId}`}>Xem hồ sơ →</Link>
+                  </Button>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
 }
 
 function cellStyle(row: 1 | 2 | 3, col: 1 | 2 | 3) {
@@ -106,11 +597,105 @@ function cellStyle(row: 1 | 2 | 3, col: 1 | 2 | 3) {
   return map[key];
 }
 
+function SuccessionByPositionTabContent(props: {
+  manualSuccessors: Record<string, string[]>;
+  openKtp: Record<string, boolean>;
+  setOpenKtp: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+  setSearchModal: React.Dispatch<
+    React.SetStateAction<{ open: boolean; positionId: string | null }>
+  >;
+  setAiPanel: React.Dispatch<React.SetStateAction<{ open: boolean; positionId: string | null }>>;
+  removeSuccessor: (positionId: string, employeeId: string) => void;
+}) {
+  const [selectedPositionId, setSelectedPositionId] = React.useState<string>(() => {
+    if (typeof window === "undefined") return "pos-pd";
+    const p = new URLSearchParams(window.location.search).get("position");
+    return p && positions.some((x) => x.id === p) ? p : "pos-pd";
+  });
+
+  React.useEffect(() => {
+    const p = new URLSearchParams(window.location.search).get("position");
+    if (p && positions.some((x) => x.id === p)) setSelectedPositionId(p);
+  }, []);
+
+  const selectedPosition = positions.find((p) => p.id === selectedPositionId) ?? positions[0];
+  const candidates = mergedCandidatesForPosition(selectedPosition.id, props.manualSuccessors);
+  const currentHolder = employees.find((e) => e.id === selectedPosition.currentHolderId);
+
+  return (
+    <div
+      className="rounded-xl border border-[#E5E7EB] bg-white overflow-hidden"
+      style={{
+        height: "calc(100vh - 200px)",
+        maxHeight: "calc(100vh - 200px)",
+        minHeight: "520px",
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "300px 1fr",
+          gap: 0,
+          height: "100%",
+          minHeight: 0,
+          minWidth: 0,
+        }}
+      >
+        <div
+          style={{
+            minHeight: 0,
+            minWidth: 0,
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
+            height: "100%",
+            background: "#fff",
+          }}
+        >
+          <PositionList
+            positions={positions}
+            selectedPositionId={selectedPositionId}
+            onSelect={setSelectedPositionId}
+            manualSuccessors={props.manualSuccessors}
+          />
+        </div>
+        <div
+          style={{
+            minHeight: 0,
+            minWidth: 0,
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
+            height: "100%",
+            background: "#F9FAFB",
+          }}
+        >
+          <PositionDetail
+            selectedPosition={selectedPosition}
+            candidates={candidates}
+            currentHolder={currentHolder}
+            onAddClick={() => props.setSearchModal({ open: true, positionId: selectedPosition.id })}
+            onAiSuggest={() => props.setAiPanel({ open: true, positionId: selectedPosition.id })}
+            openKtp={props.openKtp}
+            setOpenKtp={props.setOpenKtp}
+            removeSuccessor={props.removeSuccessor}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SuccessionPage() {
-  const [tab, setTab] = React.useState<Tab>("matrix");
-  const [selectedPositionId, setSelectedPositionId] =
-    React.useState<string>("pos-pd");
+  const [tab, setTab] = React.useState<Tab>("byPosition");
   const [openKtp, setOpenKtp] = React.useState<Record<string, boolean>>({});
+
+  const [aiPanel, setAiPanel] = React.useState<{ open: boolean; positionId: string | null }>({
+    open: false,
+    positionId: null,
+  });
+  const [aiBackfills, setAiBackfills] = React.useState<Record<string, string[]>>({});
 
   const [searchModal, setSearchModal] = React.useState<{
     open: boolean;
@@ -128,42 +713,49 @@ export default function SuccessionPage() {
 
   React.useEffect(() => {
     const sp = new URLSearchParams(window.location.search);
-    const p = sp.get("position");
-    if (p) setSelectedPositionId(p);
     const t = sp.get("tab");
     if (t === "2" || t === "byPosition") setTab("byPosition");
     if (t === "1" || t === "matrix") setTab("matrix");
   }, []);
 
-  const selectedPosition = positions.find((p) => p.id === selectedPositionId) ?? positions[0];
-  const selectedEntry = successionMap.find((s) => s.positionId === selectedPosition.id);
-  const best = bestCandidate(selectedPosition.id);
+  const aiPanelPosition = aiPanel.positionId
+    ? positions.find((p) => p.id === aiPanel.positionId) ?? null
+    : null;
 
-  const originalCandidates = selectedEntry?.candidates ?? [];
-  const addedIds = manualSuccessors[selectedPosition.id] ?? [];
-  const requiredOverall = requiredOverallScoreForPosition(selectedPosition.level);
-  const addedCandidates = employees
-    .filter((e) => addedIds.includes(e.id))
-    .map((e) => {
-      const gap = requiredOverall - e.overallScore;
-      return {
+  const aiSuggestions: AiSuggestion[] = React.useMemo(() => {
+    if (!aiPanelPosition) return [];
+
+    // Hard-coded demo story (same as /positions)
+    if (aiPanelPosition.id === "pos-fd" || aiPanelPosition.id === "pos-bdm") {
+      return [
+        { employeeId: "emp-019", fitScore: 91, reason: "Kỹ thuật vững, đang deputy 2 năm, IDP 75%" },
+        { employeeId: "emp-010", fitScore: 74, reason: "Tiềm năng cao, cần thêm 18 tháng" },
+        { employeeId: "emp-002", fitScore: 68, reason: "Kỹ thuật xuất sắc nhưng risk score 35" },
+      ];
+    }
+
+    const entry = successionMap.find((s) => s.positionId === aiPanelPosition.id);
+    const manual = manualSuccessors[aiPanelPosition.id] ?? [];
+    const excluded = new Set<string>([
+      aiPanelPosition.currentHolderId,
+      ...(entry?.candidates.map((c) => c.employeeId) ?? []),
+      ...manual,
+      ...(aiBackfills[aiPanelPosition.id] ?? []),
+    ]);
+
+    return employees
+      .filter((e) => !excluded.has(e.id))
+      .map((e) => ({
         employeeId: e.id,
-        readiness: e.readiness ?? "3-5yr",
-        gapScore: gap,
-        strengths: [],
-        developmentNeeds: [],
-        nominatedDate: "—",
-        nominatedBy: "Thêm thủ công",
-        isManuallyAdded: true as const,
-      };
-    });
-
-  const candidates = [
-    ...originalCandidates.map((c) => ({ ...c, isManuallyAdded: false as const })),
-    ...addedCandidates,
-  ];
-
-  const currentHolder = employees.find((e) => e.id === selectedPosition.currentHolderId);
+        fitScore: computeFitScoreForPosition(aiPanelPosition.level, e),
+        reason:
+          e.idpStatus === "active"
+            ? "IDP đang active, có thể tăng tốc phát triển"
+            : "Có nền tảng tốt, cần bổ sung theo kế hoạch 70-20-10",
+      }))
+      .sort((a, b) => b.fitScore - a.fitScore)
+      .slice(0, 3);
+  }, [aiBackfills, aiPanelPosition, manualSuccessors]);
 
   function addSuccessorsBulk(positionId: string, employeeIds: string[]) {
     if (employeeIds.length === 0) return;
@@ -174,15 +766,32 @@ export default function SuccessionPage() {
     });
   }
 
+  function addAiBackfill(positionId: string, employeeId: string) {
+    const emp = employees.find((e) => e.id === employeeId);
+    const pos = positions.find((p) => p.id === positionId);
+    setAiBackfills((prev) => {
+      const curr = prev[positionId] ?? [];
+      if (curr.includes(employeeId)) return prev;
+      return { ...prev, [positionId]: [employeeId, ...curr] };
+    });
+    addSuccessorsBulk(positionId, [employeeId]);
+    showToast(`Đã thêm ${emp?.name ?? employeeId} vào danh sách kế thừa ${pos?.titleVi ?? positionId}`);
+  }
+
   function removeSuccessor(positionId: string, employeeId: string) {
     setManualSuccessors((prev) => {
-      const curr = prev[positionId] ?? [];
-      const next = curr.filter((id) => id !== employeeId);
-      if (next.length === 0) {
-        const { [positionId]: _omit, ...rest } = prev;
-        return rest;
-      }
-      return { ...prev, [positionId]: next };
+      const nextMap = { ...prev };
+      const filtered = (nextMap[positionId] ?? []).filter((id) => id !== employeeId);
+      if (filtered.length === 0) delete nextMap[positionId];
+      else nextMap[positionId] = filtered;
+      return nextMap;
+    });
+    setAiBackfills((prev) => {
+      const nextMap = { ...prev };
+      const filtered = (nextMap[positionId] ?? []).filter((id) => id !== employeeId);
+      if (filtered.length === 0) delete nextMap[positionId];
+      else nextMap[positionId] = filtered;
+      return nextMap;
     });
   }
 
@@ -407,291 +1016,112 @@ export default function SuccessionPage() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[300px,1fr]">
-          {/* LEFT PANEL */}
-          <div className="so-card rounded-xl p-4">
-            <div className="text-[11px] font-semibold text-[#6B7280] uppercase">
-              Chọn vị trí
-            </div>
-            <div className="mt-3 space-y-1">
-              {positions.map((p) => {
-                const entry = successionMap.find((s) => s.positionId === p.id);
-                const best = bestCandidate(p.id);
-                const selected = p.id === selectedPositionId;
-                const badgeCount = entry?.candidates.length ?? 0;
+        <SuccessionByPositionTabContent
+          manualSuccessors={manualSuccessors}
+          openKtp={openKtp}
+          setOpenKtp={setOpenKtp}
+          setSearchModal={setSearchModal}
+          setAiPanel={setAiPanel}
+          removeSuccessor={removeSuccessor}
+        />
+      )}
 
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => setSelectedPositionId(p.id)}
-                    className={[
-                      "w-full text-left rounded-lg px-3 py-2 transition",
-                      "hover:bg-[#F9FAFB]",
-                      selected ? "bg-[#EEF2FF] text-[#4F46E5] font-semibold border-l-[3px] border-l-[#6366F1]" : "text-[#374151]",
-                    ].join(" ")}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span
-                          className={[
-                            "h-2 w-2 rounded-full",
-                            indicatorColor(best?.readiness ?? null),
-                          ].join(" ")}
-                        />
-                        <span className="truncate text-[13px]">
-                          {p.titleVi}
-                        </span>
-                      </div>
-                      <span className="shrink-0 rounded-full bg-[#F9FAFB] px-2 py-0.5 text-[11px] font-semibold text-[#6B7280] border border-[#E5E7EB]">
-                        {badgeCount}
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
+      {/* AI slide panel (same pattern as /positions) */}
+      <div
+        className={[
+          "fixed inset-0 z-50",
+          aiPanel.open ? "pointer-events-auto" : "pointer-events-none",
+        ].join(" ")}
+      >
+        <div
+          className={[
+            "absolute inset-0 bg-black/30 backdrop-blur-sm transition-opacity",
+            aiPanel.open ? "opacity-100" : "opacity-0",
+          ].join(" ")}
+          onClick={() => setAiPanel({ open: false, positionId: null })}
+        />
+        <div
+          className={[
+            "absolute right-0 top-0 h-[100dvh] w-[420px] max-w-[calc(100vw-24px)] bg-white shadow-2xl border-l border-[#E5E7EB] transition-transform",
+            aiPanel.open ? "translate-x-0" : "translate-x-full",
+          ].join(" ")}
+        >
+          <div className="flex items-center justify-between border-b border-[#E5E7EB] px-5 py-4">
+            <div className="min-w-0">
+              <div className="text-[16px] font-bold text-[#111827]">Top 3 ứng viên phù hợp nhất</div>
+              <div className="mt-1 text-[13px] text-[#6B7280] truncate">
+                {aiPanelPosition?.titleVi ?? "—"}
+              </div>
             </div>
+            <button
+              type="button"
+              onClick={() => setAiPanel({ open: false, positionId: null })}
+              className="grid h-9 w-9 place-items-center rounded-lg border border-[#E5E7EB] bg-white text-[#6B7280] hover:text-[#111827]"
+              aria-label="Đóng"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
 
-          {/* RIGHT PANEL */}
-          <div className="so-card rounded-xl p-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="min-w-0">
-                <div className="text-[20px] font-bold text-[#111827] truncate">
-                  {selectedPosition.title}
-                </div>
-                <div className="mt-1 text-[14px] text-[#6B7280] truncate">
-                  {selectedPosition.titleVi}
-                </div>
-              </div>
-              <div className="shrink-0">
-                {best ? (
-                  <ReadinessBadge readiness={best.readiness} className="px-4 py-1.5" />
-                ) : addedCandidates.length > 0 && originalCandidates.length === 0 ? (
-                  <span className="inline-flex items-center rounded-full border border-[#FDE68A] bg-[#FEF9C3] px-4 py-1.5 text-[12px] font-semibold text-[#854D0E]">
-                    ⚡ Đang xem xét
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center rounded-full border border-[#FECACA] bg-[#FEF2F2] px-4 py-1.5 text-[12px] font-semibold text-[#DC2626]">
-                    Chưa có kế thừa
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <div className="mt-5 flex items-center gap-4">
-              {currentHolder ? (
-                <>
-                  <EmployeeAvatar employee={currentHolder} size="md" />
-                  <div className="min-w-0">
-                    <div className="text-[14px] font-semibold text-[#111827] truncate">
-                      {currentHolder.name}
+          <div className="p-5 space-y-3 overflow-y-auto h-[calc(100dvh-140px)]">
+            {aiSuggestions.map((sug, idx) => {
+              const e = employees.find((x) => x.id === sug.employeeId);
+              const alreadyAdded = !!(
+                aiPanel.positionId &&
+                (manualSuccessors[aiPanel.positionId] ?? []).includes(sug.employeeId)
+              );
+              return (
+                <div key={sug.employeeId} className="rounded-xl border border-[#E5E7EB] bg-white p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-3">
+                        {e ? <EmployeeAvatar employee={e} size="sm" /> : null}
+                        <div className="min-w-0">
+                          <div className="truncate text-[14px] font-semibold text-[#111827]">
+                            {idx + 1}. {e?.name ?? sug.employeeId}
+                          </div>
+                          <div className="truncate text-[12px] text-[#6B7280]">
+                            {e?.currentRoleTitle ?? "—"}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-3 text-[13px] text-[#374151] leading-6">
+                        <span className="font-semibold">{sug.fitScore}%</span> phù hợp · {sug.reason}
+                      </div>
                     </div>
-                    <div className="text-[13px] text-[#6B7280] truncate">
-                      {currentHolder.currentRoleTitle ?? "—"}
+                    <div className="shrink-0">
+                      {alreadyAdded ? (
+                        <button
+                          type="button"
+                          disabled
+                          className="rounded-lg bg-[#DCFCE7] px-3 py-1.5 text-[13px] font-semibold text-[#15803D]"
+                        >
+                          Đã thêm
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!aiPanel.positionId) return;
+                            addAiBackfill(aiPanel.positionId, sug.employeeId);
+                          }}
+                          className="rounded-lg bg-[#4F46E5] px-3 py-1.5 text-[13px] font-semibold text-white"
+                        >
+                          + Thêm vào kế thừa
+                        </button>
+                      )}
                     </div>
                   </div>
-                </>
-              ) : (
-                <div className="text-[14px] text-[#6B7280]">Đang tuyển dụng</div>
-              )}
-            </div>
-
-            <div className="my-5 h-px bg-[#E5E7EB]" />
-
-            {candidates.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 py-12 text-center">
-                <GitBranch className="h-10 w-10 text-[#9CA3AF]" />
-                <div className="text-[14px] font-semibold text-[#374151]">
-                  Vị trí này chưa có ứng viên kế thừa
                 </div>
-                <div className="text-[13px] text-[#6B7280]">
-                  Cần xác định và phát triển nhân sự phù hợp
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSearchModal({ open: true, positionId: selectedPosition.id })}
-                  className="mt-3 inline-flex items-center gap-2 rounded-lg bg-[#4F46E5] px-4 py-2 text-white"
-                >
-                  <Search className="h-4 w-4" />
-                  Tìm người kế thừa
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {candidates.map((c, idx) => {
-                  const emp = employees.find((e) => e.id === c.employeeId);
+              );
+            })}
+          </div>
 
-                  const ready = Math.max(0, Math.min(100, 100 - c.gapScore));
-                  const gapTone =
-                    c.gapScore <= 20
-                      ? { color: "#22C55E", label: "Gần sẵn sàng" }
-                      : c.gapScore <= 40
-                        ? { color: "#14B8A6", label: "Đang phát triển tốt" }
-                        : c.gapScore <= 60
-                          ? { color: "#F59E0B", label: "Cần thêm thời gian" }
-                          : { color: "#EF4444", label: "Gap còn lớn" };
-
-                  return (
-                    <div key={c.employeeId} className="rounded-xl border border-[#E5E7EB] bg-white p-5">
-                      {/* Header */}
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="h-7 w-7 rounded-full bg-[#EEF2FF] text-[#4F46E5] grid place-items-center text-[14px] font-bold">
-                            {idx + 1}
-                          </div>
-                          {emp ? <EmployeeAvatar employee={emp} size="md" /> : null}
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <div className="truncate text-[16px] font-semibold text-[#111827]">
-                                {emp?.name ?? c.employeeId}
-                              </div>
-                              {c.isManuallyAdded ? (
-                                <div className="flex items-center gap-1 shrink-0">
-                                  <span className="rounded-full bg-[#FEF9C3] px-2 py-0.5 text-[11px] font-semibold text-[#854D0E]">
-                                    Thêm thủ công
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => removeSuccessor(selectedPosition.id, c.employeeId)}
-                                    className="text-[#F87171] hover:text-[#DC2626]"
-                                    aria-label="Gỡ"
-                                    title="Gỡ"
-                                  >
-                                    <X className="h-3.5 w-3.5" />
-                                  </button>
-                                </div>
-                              ) : null}
-                            </div>
-                            <div className="truncate text-[13px] text-[#6B7280]">
-                              {emp?.currentRoleTitle ?? "—"}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="shrink-0 flex flex-col items-end gap-1">
-                          <ReadinessBadge readiness={c.readiness} className="px-4 py-1.5" />
-                          <div className="text-[13px] text-[#6B7280]">Ưu tiên #{idx + 1}</div>
-                        </div>
-                      </div>
-
-                      {/* Gap indicator */}
-                      <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                        <div className="text-[13px] text-[#6B7280] shrink-0">
-                          Mức độ sẵn sàng:
-                        </div>
-                        <div className="flex-1">
-                          <div className="h-2 w-full rounded-full bg-[#E5E7EB]">
-                            <div
-                              className="h-2 rounded-full"
-                              style={{ width: `${ready}%`, background: gapTone.color }}
-                            />
-                          </div>
-                        </div>
-                        <div className="text-[13px] font-semibold text-[#374151] shrink-0">
-                          {ready}% sẵn sàng
-                        </div>
-                      </div>
-                      <div className="mt-2 text-[13px] text-[#6B7280]">{gapTone.label}</div>
-
-                      {/* Strengths & dev needs */}
-                      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-                        <div>
-                          <div className="flex items-center gap-2 text-[13px] font-semibold text-[#374151]">
-                            <CheckCircle className="h-4 w-4 text-[#22C55E]" />
-                            Điểm mạnh
-                          </div>
-                          <ul className="mt-2 space-y-1 text-[13px] text-[#374151]">
-                            {c.strengths.map((s) => (
-                              <li key={s} className="flex items-start gap-2">
-                                <span className="mt-1 h-1.5 w-1.5 rounded-full bg-[#22C55E]" />
-                                <span>{s}</span>
-                              </li>
-                            ))}
-                            {c.strengths.length === 0 ? (
-                              <li className="text-[#6B7280]">—</li>
-                            ) : null}
-                          </ul>
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2 text-[13px] font-semibold text-[#374151]">
-                            <TrendingUp className="h-4 w-4 text-[#F59E0B]" />
-                            Cần phát triển
-                          </div>
-                          <ul className="mt-2 space-y-1 text-[13px] text-[#374151]">
-                            {c.developmentNeeds.map((n) => (
-                              <li key={n} className="flex items-start gap-2">
-                                <span className="mt-1 h-1.5 w-1.5 rounded-full bg-[#F59E0B]" />
-                                <span>{n}</span>
-                              </li>
-                            ))}
-                            {c.developmentNeeds.length === 0 ? (
-                              <li className="text-[#6B7280]">—</li>
-                            ) : null}
-                          </ul>
-                        </div>
-                      </div>
-
-                      {/* Footer */}
-                      <div className="mt-4 border-t border-[#E5E7EB] pt-4 flex items-center justify-between gap-3">
-                        <div className="text-[13px] text-[#6B7280]">
-                          Đề cử bởi {c.nominatedBy} · {c.nominatedDate}
-                        </div>
-                        <Button asChild variant="outline" className="h-8 rounded-lg px-3 whitespace-nowrap">
-                          <Link href={`/talent/${c.employeeId}`}>Xem hồ sơ →</Link>
-                        </Button>
-                      </div>
-
-                      {/* KTP accordion (only now / 1-2yr) */}
-                      {c.readiness === "now" || c.readiness === "1-2yr" ? (
-                        <div className="mt-4">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setOpenKtp((prev) => ({
-                                ...prev,
-                                [c.employeeId]: !prev[c.employeeId],
-                              }))
-                            }
-                            className="w-full flex items-center justify-between gap-3 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3 hover:bg-white"
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              <GitMerge className="h-4 w-4 text-[#4F46E5]" />
-                              <div className="text-[13px] font-semibold text-[#374151] truncate">
-                                Kế hoạch Chuyển giao Tri thức
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-[#6B7280] border border-[#E5E7EB]">
-                                {openKtp[c.employeeId] ? "Đóng" : "Mở"}
-                              </span>
-                              <ChevronDown
-                                className={[
-                                  "h-4 w-4 text-[#6B7280] transition",
-                                  openKtp[c.employeeId] ? "rotate-180" : "",
-                                ].join(" ")}
-                              />
-                            </div>
-                          </button>
-
-                          {openKtp[c.employeeId] ? (
-                            <div className="mt-3">
-                              <KnowledgeTransferPanel
-                                positionId={selectedPosition.id}
-                                holderId={selectedPosition.currentHolderId}
-                                successorId={c.employeeId}
-                              />
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+          <div className="border-t border-[#E5E7EB] px-5 py-3 text-[12px] text-[#6B7280]">
+            FitScore (demo) = overallScore - gapPenalty + idpBonus - riskPenalty
           </div>
         </div>
-      )}
+      </div>
 
       <CandidateSearchModal
         open={searchModal.open}

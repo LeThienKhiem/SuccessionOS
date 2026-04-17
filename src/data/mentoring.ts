@@ -27,7 +27,7 @@ export interface MentoringSession {
 export const mentoringPairs: MentoringPair[] = [
   // NVĐ → NVT
   {
-    id: "pair-001",
+    id: "pair-nvd-nvt",
     mentorId: "emp-001",
     menteeId: "emp-019",
     track: "technical",
@@ -38,7 +38,7 @@ export const mentoringPairs: MentoringPair[] = [
   },
   // LTH → NTP (over-commitment story)
   {
-    id: "pair-002",
+    id: "pair-lth-ntp",
     mentorId: "emp-003",
     menteeId: "emp-023",
     track: "leadership",
@@ -49,7 +49,7 @@ export const mentoringPairs: MentoringPair[] = [
   },
   // VĐL → PVM (behind story)
   {
-    id: "pair-003",
+    id: "pair-vdl-pvm",
     mentorId: "emp-006",
     menteeId: "emp-022",
     track: "technical",
@@ -61,10 +61,10 @@ export const mentoringPairs: MentoringPair[] = [
 ];
 
 export const mentoringSessions: MentoringSession[] = [
-  // pair-001 NVĐ → NVT
+  // pair-nvd-nvt NVĐ → NVT
   {
     id: "s-001",
-    pairId: "pair-001",
+    pairId: "pair-nvd-nvt",
     date: "05/03/2025",
     topic: "Client PVN negotiation",
     durationMin: 90,
@@ -74,7 +74,7 @@ export const mentoringSessions: MentoringSession[] = [
   },
   {
     id: "s-002",
-    pairId: "pair-001",
+    pairId: "pair-nvd-nvt",
     date: "10/02/2025",
     topic: "Block B risk escalation",
     durationMin: 60,
@@ -84,7 +84,7 @@ export const mentoringSessions: MentoringSession[] = [
   },
   {
     id: "s-003",
-    pairId: "pair-001",
+    pairId: "pair-nvd-nvt",
     date: "12/01/2025",
     topic: "Stakeholder mapping cho giai đoạn procurement",
     durationMin: 75,
@@ -94,7 +94,7 @@ export const mentoringSessions: MentoringSession[] = [
   },
   {
     id: "s-004",
-    pairId: "pair-001",
+    pairId: "pair-nvd-nvt",
     date: "18/12/2024",
     topic: "Leadership presence — trình bày trước Ban PTNT",
     durationMin: 60,
@@ -103,10 +103,10 @@ export const mentoringSessions: MentoringSession[] = [
     confirmed: true,
   },
 
-  // pair-002 LTH → NTP (vượt cam kết)
+  // pair-lth-ntp LTH → NTP (vượt cam kết)
   {
     id: "s-005",
-    pairId: "pair-002",
+    pairId: "pair-lth-ntp",
     date: "22/03/2025",
     topic: "HSE incident investigation (case study offshore)",
     durationMin: 120,
@@ -116,7 +116,7 @@ export const mentoringSessions: MentoringSession[] = [
   },
   {
     id: "s-006",
-    pairId: "pair-002",
+    pairId: "pair-lth-ntp",
     date: "28/02/2025",
     topic: "ISO 45001 audit readiness",
     durationMin: 90,
@@ -126,7 +126,7 @@ export const mentoringSessions: MentoringSession[] = [
   },
   {
     id: "s-007",
-    pairId: "pair-002",
+    pairId: "pair-lth-ntp",
     date: "30/01/2025",
     topic: "Crisis communication & stakeholder handling",
     durationMin: 75,
@@ -136,7 +136,7 @@ export const mentoringSessions: MentoringSession[] = [
   },
   {
     id: "s-008",
-    pairId: "pair-002",
+    pairId: "pair-lth-ntp",
     date: "15/12/2024",
     topic: "Designing HSE training program (Q1 roadmap)",
     durationMin: 90,
@@ -145,10 +145,10 @@ export const mentoringSessions: MentoringSession[] = [
     confirmed: true,
   },
 
-  // pair-003 VĐL → PVM (chậm tiến độ)
+  // pair-vdl-pvm VĐL → PVM (chậm tiến độ)
   {
     id: "s-009",
-    pairId: "pair-003",
+    pairId: "pair-vdl-pvm",
     date: "05/03/2025",
     topic: "FEA review — common pitfalls",
     durationMin: 60,
@@ -158,7 +158,7 @@ export const mentoringSessions: MentoringSession[] = [
   },
   {
     id: "s-010",
-    pairId: "pair-003",
+    pairId: "pair-vdl-pvm",
     date: "12/02/2025",
     topic: "CAESAR II stress report walkthrough",
     durationMin: 60,
@@ -168,7 +168,7 @@ export const mentoringSessions: MentoringSession[] = [
   },
   {
     id: "s-011",
-    pairId: "pair-003",
+    pairId: "pair-vdl-pvm",
     date: "08/01/2025",
     topic: "Career roadmap: Senior → Lead (Structural)",
     durationMin: 45,
@@ -178,7 +178,7 @@ export const mentoringSessions: MentoringSession[] = [
   },
   {
     id: "s-012",
-    pairId: "pair-003",
+    pairId: "pair-vdl-pvm",
     date: "18/12/2024",
     topic: "Review drawing stamps & compliance checklist",
     durationMin: 45,
