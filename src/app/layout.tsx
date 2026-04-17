@@ -23,13 +23,14 @@ export default function RootLayout({
     <html lang="vi" className={`${inter.variable} h-full antialiased overflow-x-hidden`}>
       <body className="min-h-full bg-[#F8F9FC] text-[#374151] overflow-x-hidden">
         <ModuleProvider>
-          <div
-            className="min-h-full"
-            style={{ ["--sidebar-w" as any]: "216px" }}
-          >
+          <div className="flex min-h-screen w-full">
+            {/* Spacer for fixed sidebar (desktop/tablet only) */}
+            <div className="w-[220px] lg:w-[220px] md:w-16 max-md:hidden flex-shrink-0" />
             <AppSidebar />
-            <main className="min-h-full ml-[var(--sidebar-w)] w-[calc(100%-var(--sidebar-w))] bg-[#F8F9FC] overflow-x-hidden">
-              <div className="p-8">{children}</div>
+            <main className="flex-1 min-w-0 overflow-auto bg-[#F8F9FC]">
+              <div className="w-full 2xl:max-w-[1600px] 2xl:mx-auto p-8 max-lg:p-4 max-sm:p-3">
+                {children}
+              </div>
             </main>
           </div>
         </ModuleProvider>
