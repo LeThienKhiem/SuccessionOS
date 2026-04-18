@@ -93,3 +93,76 @@
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
+
+/* Talent profile — explorer navigate (fade + slide) */
+@keyframes profileFadeOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes profileFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.profile-out {
+  animation: profileFadeOut 180ms ease-in forwards;
+  pointer-events: none;
+}
+
+.profile-in {
+  animation: profileFadeIn 200ms ease-out forwards;
+}
+
+.profile-idle {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Network diagram — node group pop when employee focus changes */
+@keyframes nodePopIn {
+  0% {
+    transform: scale(0.7);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.node-pop-in {
+  animation: nodePopIn 250ms ease-out forwards;
+}
+
+/* Explorer breadcrumb — newest segment */
+@keyframes breadcrumbSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.breadcrumb-slide-in {
+  animation: breadcrumbSlideIn 200ms ease-out;
+}

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, BarChart2 } from "lucide-react";
+import { AlertTriangle, BarChart2, Store } from "lucide-react";
 import type { Employee } from "@/data/types";
 import { useModuleContext } from "@/context/ModuleContext";
 
@@ -18,6 +18,19 @@ export function RiskWarningBanner({ employee }: { employee: Employee }) {
   const market = employee.marketRiskFactors ?? [];
 
   const visible = marketActive ? [...internal, ...market] : [...internal];
+
+  const marketLockedPill =
+    !marketActive && market.length > 0 ? (
+      <button
+        type="button"
+        title={`${market.length} yếu tố Market Intelligence chưa kích hoạt — mở Marketplace để kích hoạt module và xem đầy đủ chi tiết.`}
+        onClick={() => router.push("/marketplace")}
+        className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-dashed border-[#D1D5DB] bg-white/60 px-2 py-[3px] text-[11px] text-[#9CA3AF] hover:bg-white"
+      >
+        <Store className="h-3 w-3 shrink-0" aria-hidden />
+        +{market.length}
+      </button>
+    ) : null;
 
   return (
     <div className="rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-5 py-4">
@@ -52,28 +65,10 @@ export function RiskWarningBanner({ employee }: { employee: Employee }) {
                   ))
                 : null}
 
-              {!marketActive && market.length > 0 ? (
-                <button
-                  type="button"
-                  title="Kích hoạt Market Intelligence để xem đầy đủ"
-                  onClick={() => router.push("/marketplace")}
-                  className="inline-flex items-center rounded-full border border-dashed border-[#D1D5DB] bg-[#F3F4F6] px-3 py-1 text-[11px] italic text-[#6B7280] hover:bg-white"
-                >
-                  + {market.length} yếu tố từ Market Intelligence (chưa kích hoạt)
-                </button>
-              ) : null}
+              {marketLockedPill}
             </div>
-          ) : !marketActive && market.length > 0 ? (
-            <div className="mt-2 flex flex-wrap gap-2">
-              <button
-                type="button"
-                title="Kích hoạt Market Intelligence để xem đầy đủ"
-                onClick={() => router.push("/marketplace")}
-                className="inline-flex items-center rounded-full border border-dashed border-[#D1D5DB] bg-[#F3F4F6] px-3 py-1 text-[11px] italic text-[#6B7280] hover:bg-white"
-              >
-                + {market.length} yếu tố từ Market Intelligence (chưa kích hoạt)
-              </button>
-            </div>
+          ) : marketLockedPill ? (
+            <div className="mt-2 flex flex-wrap gap-2">{marketLockedPill}</div>
           ) : null}
         </div>
       </div>

@@ -8,6 +8,9 @@ export const successionMap: SuccessionEntry[] = [
     positionId: 'pos-pd',
     currentHolderId: 'emp-001',
     candidates: [
+      { employeeId: 'emp-006', readiness: 'now',   gapScore: 14, nominatedDate: '2024-06-01', nominatedBy: 'Ban PTNT',
+        strengths: ['Lead structural xuất sắc', 'Được client Block B tin tưởng', 'Sẵn sàng mở rộng scope PM'],
+        developmentNeeds: ['Hoàn thiện kinh nghiệm EPCI end-to-end', 'Đàm phán contract cấp cao'] },
       { employeeId: 'emp-019', readiness: 'now',   gapScore: 12, nominatedDate: '2024-06-01', nominatedBy: 'Ban PTNT',
         strengths: ['Đã deputy 2 năm', 'Hiểu toàn bộ scope dự án', 'Được client tin tưởng'],
         developmentNeeds: ['Cần thêm kinh nghiệm đàm phán contract cấp cao'] },
@@ -20,6 +23,9 @@ export const successionMap: SuccessionEntry[] = [
     positionId: 'pos-em',
     currentHolderId: 'emp-002',
     candidates: [
+      { employeeId: 'emp-001', readiness: '1-2yr', gapScore: 22, nominatedDate: '2024-06-01', nominatedBy: 'Ban PTNT',
+        strengths: ['Kinh nghiệm EPCI director', 'Stakeholder cấp cao', 'Risk & contract'],
+        developmentNeeds: ['Deepen multi-discipline technical leadership', 'Coaching next-gen EM'] },
       { employeeId: 'emp-020', readiness: '1-2yr', gapScore: 18, nominatedDate: '2024-06-01', nominatedBy: 'Nguyễn Văn Đức',
         strengths: ['Năng lực kỹ thuật xuất sắc', 'Đang deputy EM'],
         developmentNeeds: ['Cần thêm kinh nghiệm quản lý multi-discipline team'] },

@@ -34,7 +34,7 @@ export const employees: Employee[] = [
     overallScore: 88,   // 88*.4 + 91*.3 + 90*.2 + 72*.1 = 88.1
 
     readiness: 'now',
-    targetPositionId: undefined,
+    targetPositionId: 'pos-em',
     isKeyKnowledgeHolder: true,
 
     riskScore: 22,
@@ -224,7 +224,7 @@ export const employees: Employee[] = [
     overallScore: 91,
 
     readiness: 'now',
-    targetPositionId: undefined,
+    targetPositionId: 'pos-pd',
     isKeyKnowledgeHolder: true,
 
     riskScore: 62,

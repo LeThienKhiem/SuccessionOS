@@ -19,19 +19,24 @@ import type { KnowledgeTransferPlan } from "@/data/knowledgeTransfer";
 import type { MarketIntelData } from "@/data/marketIntelligence";
 import { employees } from "@/data/employees";
 import { departments, positions } from "@/data/positions";
-import { getRiskColor, getScoreColor } from "@/data/assessments";
+import { assessments, getRiskColor, getScoreColor } from "@/data/assessments";
+import { idps, projects, successionMap } from "@/data/succession";
+import { knowledgeTransferPlans } from "@/data/knowledgeTransfer";
 
 import { useModuleContext } from "@/context/ModuleContext";
 import { CareerPathTab } from "@/components/CareerPathTab";
-import { EmployeeAvatar } from "@/components/EmployeeAvatar";
+import { TalentProfileExplorerBreadcrumb } from "@/components/talent/TalentProfileExplorerBreadcrumb";
+import { TalentProfileHero } from "@/components/talent/TalentProfileHero";
+import { TalentProfileNetworkSuccessionCard } from "@/components/talent/TalentProfileNetworkSuccessionCard";
+import { TalentProfileRadarCard } from "@/components/talent/TalentProfileRadarCard";
+import { TalentProfileZoneCRiskHrm } from "@/components/talent/TalentProfileZoneCRiskHrm";
 import { MarketIntelCard } from "@/components/MarketIntelCard";
 import { ReadinessBadge } from "@/components/ReadinessBadge";
 import { RiskWarningBanner } from "@/components/RiskWarningBanner";
 import { ScoreBar } from "@/components/ScoreBar";
-import { TierBadge } from "@/components/TierBadge";
 import { Button } from "@/components/ui/button";
 
-type TabKey = "overview" | "ai";
+type ProfileNavPhase = "idle" | "out" | "in";
 
 type AuditDotTone = "green" | "amber" | "red";
 type AuditEntry = {
@@ -49,15 +54,6 @@ function auditDot(tone: AuditDotTone) {
   if (tone === "amber") return { dot: "bg-[#F59E0B]", ring: "ring-[#FDE68A]" };
   if (tone === "red") return { dot: "bg-[#DC2626]", ring: "ring-[#FECACA]" };
   return { dot: "bg-[#22C55E]", ring: "ring-[#BBF7D0]" };
-}
-
-function careerTrackBadge(track: string) {
-  if (track === "leadership")
-    return {
-      label: "Tuyến Lãnh đạo",
-      className: "bg-[#EEF2FF] text-[#4F46E5]",
-    };
-  return { label: "Tuyến Chuyên gia", className: "bg-[#F0FDFA] text-[#0F766E]" };
 }
 
 function idpStatusBadge(status: string) {
@@ -108,129 +104,162 @@ export function EmployeeProfileClient(props: {
 }) {
   const { isActive } = useModuleContext();
 
-  const showAITab = isActive("aiCareerPath");
+  const showAICareerPath = isActive("aiCareerPath");
   const showMarketTab = isActive("marketIntelligence");
 
-  const [activeTab, setActiveTab] = React.useState<TabKey>("overview");
   const [openAudit, setOpenAudit] = React.useState(false);
 
+  const originalEmployee = props.employee;
+
+  const [focusedEmployeeId, setFocusedEmployeeId] = React.useState(() => originalEmployee.id);
+  const [navHistory, setNavHistory] = React.useState<string[]>(() => [originalEmployee.id]);
+  const [phase, setPhase] = React.useState<ProfileNavPhase>("idle");
+
   React.useEffect(() => {
-    if (!showAITab && activeTab === "ai") setActiveTab("overview");
-  }, [showAITab, activeTab]);
+    setFocusedEmployeeId(originalEmployee.id);
+    setNavHistory([originalEmployee.id]);
+    setPhase("idle");
+  }, [originalEmployee.id]);
 
-  const employee = props.employee;
-  const dept = departments.find((d) => d.id === employee.departmentId);
-  const position = positions.find((p) => p.id === employee.positionId);
-  const career = careerTrackBadge(employee.careerTrack);
+  React.useEffect(() => {
+    setOpenAudit(false);
+  }, [focusedEmployeeId]);
 
-  const mentor = employee.mentorId ? employees.find((e) => e.id === employee.mentorId) : undefined;
-  const mentees = (employee.menteeIds ?? [])
-    .map((mid) => employees.find((e) => e.id === mid))
-    .filter(Boolean);
+  const focusedEmployee = React.useMemo(
+    () => employees.find((e) => e.id === focusedEmployeeId) ?? originalEmployee,
+    [focusedEmployeeId, originalEmployee],
+  );
 
-  const targetPosition = employee.targetPositionId
-    ? positions.find((p) => p.id === employee.targetPositionId)
+  const handleNodeClick = React.useCallback(
+    (clicked: Employee) => {
+      if (clicked.id === focusedEmployeeId) return;
+      if (phase !== "idle") return;
+      setPhase("out");
+      window.setTimeout(() => {
+        setNavHistory((prev) => [...prev, clicked.id]);
+        setFocusedEmployeeId(clicked.id);
+        setPhase("in");
+        window.setTimeout(() => setPhase("idle"), 200);
+      }, 180);
+    },
+    [focusedEmployeeId, phase],
+  );
+
+  const handleBreadcrumbClick = React.useCallback(
+    (idx: number) => {
+      const empId = navHistory[idx];
+      if (empId == null || empId === focusedEmployeeId) return;
+      if (phase !== "idle") return;
+      setPhase("out");
+      window.setTimeout(() => {
+        setNavHistory((prev) => prev.slice(0, idx + 1));
+        setFocusedEmployeeId(empId);
+        setPhase("in");
+        window.setTimeout(() => setPhase("idle"), 200);
+      }, 180);
+    },
+    [navHistory, focusedEmployeeId, phase],
+  );
+
+  const handleExplorerReset = React.useCallback(() => {
+    if (phase !== "idle") return;
+    if (navHistory.length === 1 && focusedEmployeeId === originalEmployee.id) return;
+    setPhase("out");
+    window.setTimeout(() => {
+      setNavHistory([originalEmployee.id]);
+      setFocusedEmployeeId(originalEmployee.id);
+      setPhase("in");
+      window.setTimeout(() => setPhase("idle"), 200);
+    }, 180);
+  }, [originalEmployee.id, focusedEmployeeId, navHistory.length, phase]);
+
+  const focusedAssessment = React.useMemo(
+    () => assessments.find((a) => a.employeeId === focusedEmployee.id),
+    [focusedEmployee],
+  );
+
+  const focusedIdp = React.useMemo(
+    () => idps.find((i) => i.employeeId === focusedEmployee.id),
+    [focusedEmployee],
+  );
+
+  const focusedKtp = React.useMemo(
+    () =>
+      knowledgeTransferPlans.find((k) => k.successorId === focusedEmployee.id) ??
+      knowledgeTransferPlans.find((k) => k.holderId === focusedEmployee.id),
+    [focusedEmployee],
+  );
+
+  const focusedSuccessionEntry = React.useMemo(
+    () =>
+      focusedEmployee.targetPositionId
+        ? successionMap.find((s) => s.positionId === focusedEmployee.targetPositionId)
+        : undefined,
+    [focusedEmployee],
+  );
+
+  const focusedProject = React.useMemo(
+    () =>
+      focusedEmployee.currentProjectId
+        ? projects.find((p) => p.id === focusedEmployee.currentProjectId)
+        : undefined,
+    [focusedEmployee],
+  );
+
+  const dept = departments.find((d) => d.id === focusedEmployee.departmentId);
+  const position = positions.find((p) => p.id === focusedEmployee.positionId);
+
+  const targetPosition = focusedEmployee.targetPositionId
+    ? positions.find((p) => p.id === focusedEmployee.targetPositionId)
     : undefined;
 
-  const selfCandidate = props.successionEntry?.candidates?.find((c) => c.employeeId === employee.id);
+  const selfCandidate = focusedSuccessionEntry?.candidates?.find((c) => c.employeeId === focusedEmployee.id);
 
-  const ktp = props.ktp;
-  const isHolder = ktp?.holderId === employee.id;
-  const isSuccessor = ktp?.successorId === employee.id;
+  const isHolder = focusedKtp?.holderId === focusedEmployee.id;
+  const isSuccessor = focusedKtp?.successorId === focusedEmployee.id;
 
-  const tabBtn = (key: TabKey, active: boolean) =>
-    [
-      "inline-flex items-center gap-1.5 px-4 py-2.5 text-[14px] rounded-lg -mb-px",
-      active
-        ? "border-b-2 border-b-[#4F46E5] text-[#4F46E5] font-semibold"
-        : "text-[#6B7280] hover:bg-[#F9FAFB]",
-    ].join(" ");
+  const profilePhaseClass =
+    phase === "out" ? "profile-out" : phase === "in" ? "profile-in" : "profile-idle";
 
   return (
     <div className="space-y-6">
-      <RiskWarningBanner employee={employee} />
+      <TalentProfileExplorerBreadcrumb
+        navHistory={navHistory}
+        employees={employees}
+        originalEmployeeId={originalEmployee.id}
+        onBreadcrumbClick={handleBreadcrumbClick}
+        onReset={handleExplorerReset}
+      />
 
-      {/* Profile Header Card */}
-      <div className="so-card rounded-xl p-6">
-        <div className="flex items-center gap-5">
-          <EmployeeAvatar employee={employee} size="lg" />
-          <div className="min-w-0">
-            <div className="text-[22px] font-bold text-[#111827] truncate">
-              {employee.name}
-            </div>
-            <div className="mt-1 text-[15px] text-[#6B7280] truncate">
-              {position?.titleVi ?? "—"}
-            </div>
-            <div className="mt-1 text-[14px] text-[#6B7280] truncate">
-              {dept?.name ?? "—"}
-            </div>
+      <div className={profilePhaseClass}>
+      <RiskWarningBanner employee={focusedEmployee} />
 
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <TierBadge tier={employee.tier} />
-              <ReadinessBadge readiness={employee.readiness} />
-              <span
-                className={`inline-flex items-center rounded-full px-3 py-1 text-[12px] font-semibold ${career.className}`}
-              >
-                {career.label}
-              </span>
-              {employee.isKeyKnowledgeHolder ? (
-                <span className="inline-flex items-center rounded-full bg-[#FFFBEB] px-3 py-1 text-[12px] font-semibold text-[#B45309]">
-                  🔑 Key Knowledge Holder
-                </span>
-              ) : null}
-            </div>
+      <TalentProfileHero
+        employee={focusedEmployee}
+        assessment={focusedAssessment}
+        idp={focusedIdp}
+        ktp={focusedKtp}
+      />
 
-            <div className="mt-4 flex flex-wrap items-center gap-4 text-[13px] text-[#6B7280]">
-              <span>
-                Năm công tác:{" "}
-                <span className="font-semibold text-[#111827]">{employee.yearsAtCompany}</span>{" "}
-                năm
-              </span>
-              <span className="h-4 w-px bg-[#E5E7EB]" />
-              <span>
-                Tuổi:{" "}
-                <span className="font-semibold text-[#111827]">{employee.age}</span>
-              </span>
-              <span className="h-4 w-px bg-[#E5E7EB]" />
-              <span className="truncate">
-                Dự án:{" "}
-                <span className="font-semibold text-[#111827]">{props.project?.name ?? "—"}</span>
-              </span>
-            </div>
-          </div>
-        </div>
+      {/* Zone B — visual summary */}
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <TalentProfileRadarCard
+          employee={focusedEmployee}
+          assessment={focusedAssessment}
+          targetPosition={targetPosition}
+          currentPosition={position}
+        />
+        <TalentProfileNetworkSuccessionCard
+          focusedEmployee={focusedEmployee}
+          navHistory={navHistory}
+          positions={positions ?? []}
+          onNavigate={handleNodeClick}
+        />
       </div>
 
-      {/* Tab Navigation */}
-      <div className="mt-4 border-b border-[#E5E7EB] flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setActiveTab("overview")}
-          className={tabBtn("overview", activeTab === "overview")}
-        >
-          Tổng quan
-        </button>
+      <TalentProfileZoneCRiskHrm employee={focusedEmployee} marketIntelActive={showMarketTab} />
 
-        {showAITab ? (
-          <button
-            type="button"
-            onClick={() => setActiveTab("ai")}
-            className={tabBtn("ai", activeTab === "ai")}
-          >
-            <Sparkles className="h-3.5 w-3.5 text-[#4F46E5]" />
-            Lộ trình AI
-            <span className="ml-1 rounded-full bg-[#4F46E5] px-1.5 py-0.5 text-[10px] font-bold text-white">
-              AI
-            </span>
-          </button>
-        ) : null}
-      </div>
-
-      {/* Tab Content */}
-      {activeTab === "ai" ? (
-        <CareerPathTab employeeId={employee.id} />
-      ) : (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
           {/* LEFT 65% */}
           <div className="lg:col-span-3 space-y-6">
             {/* Assessment */}
@@ -239,17 +268,17 @@ export function EmployeeProfileClient(props: {
                 Đánh giá năng lực — Chu kỳ 2024
               </div>
               <div className="mt-4 space-y-3">
-                {props.assessment ? (
+                {focusedAssessment ? (
                   <>
                     <div className="flex items-center gap-4">
                       <div className="w-[200px] text-[14px] font-medium text-[#374151]">
                         Chuyên môn kỹ thuật <span className="text-[13px] text-[#6B7280]">(40%)</span>
                       </div>
                       <div className="flex-1">
-                        <ScoreBar value={props.assessment.technical} size="lg" showNumber={false} />
+                        <ScoreBar value={focusedAssessment.technical} size="lg" showNumber={false} />
                       </div>
                       <div className="w-10 text-right text-[14px] font-semibold text-[#111827]">
-                        {props.assessment.technical}
+                        {focusedAssessment.technical}
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
@@ -257,10 +286,10 @@ export function EmployeeProfileClient(props: {
                         Kết quả &amp; Hiệu suất <span className="text-[13px] text-[#6B7280]">(30%)</span>
                       </div>
                       <div className="flex-1">
-                        <ScoreBar value={props.assessment.performance} size="lg" showNumber={false} />
+                        <ScoreBar value={focusedAssessment.performance} size="lg" showNumber={false} />
                       </div>
                       <div className="w-10 text-right text-[14px] font-semibold text-[#111827]">
-                        {props.assessment.performance}
+                        {focusedAssessment.performance}
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
@@ -268,10 +297,10 @@ export function EmployeeProfileClient(props: {
                         Hành vi &amp; Thái độ <span className="text-[13px] text-[#6B7280]">(20%)</span>
                       </div>
                       <div className="flex-1">
-                        <ScoreBar value={props.assessment.behavior} size="lg" showNumber={false} />
+                        <ScoreBar value={focusedAssessment.behavior} size="lg" showNumber={false} />
                       </div>
                       <div className="w-10 text-right text-[14px] font-semibold text-[#111827]">
-                        {props.assessment.behavior}
+                        {focusedAssessment.behavior}
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
@@ -279,10 +308,10 @@ export function EmployeeProfileClient(props: {
                         Tiềm năng phát triển <span className="text-[13px] text-[#6B7280]">(10%)</span>
                       </div>
                       <div className="flex-1">
-                        <ScoreBar value={props.assessment.potential} size="lg" showNumber={false} />
+                        <ScoreBar value={focusedAssessment.potential} size="lg" showNumber={false} />
                       </div>
                       <div className="w-10 text-right text-[14px] font-semibold text-[#111827]">
-                        {props.assessment.potential}
+                        {focusedAssessment.potential}
                       </div>
                     </div>
 
@@ -291,14 +320,14 @@ export function EmployeeProfileClient(props: {
                     <div className="flex flex-col items-center justify-center py-2">
                       <div className="flex items-end gap-2">
                         <div className="text-[48px] font-extrabold text-[#111827] leading-none">
-                          {props.assessment.overall}
+                          {focusedAssessment.overall}
                         </div>
                         <div className="pb-1 text-[14px] text-[#6B7280]">/ 100</div>
                       </div>
                       <div
-                        className={`mt-2 text-[14px] font-semibold ${overallLabel(props.assessment.overall).className}`}
+                        className={`mt-2 text-[14px] font-semibold ${overallLabel(focusedAssessment.overall).className}`}
                       >
-                        {overallLabel(props.assessment.overall).label}
+                        {overallLabel(focusedAssessment.overall).label}
                       </div>
                     </div>
 
@@ -311,7 +340,7 @@ export function EmployeeProfileClient(props: {
                           Điểm mạnh
                         </div>
                         <ul className="mt-3 space-y-2 text-[13px] text-[#374151]">
-                          {props.assessment.strengths.map((s) => (
+                          {focusedAssessment.strengths.map((s) => (
                             <li key={s} className="flex items-start gap-2">
                               <span className="mt-1 h-1.5 w-1.5 rounded-full bg-[#22C55E]" />
                               <span>{s}</span>
@@ -324,9 +353,9 @@ export function EmployeeProfileClient(props: {
                           <AlertCircle className="h-4 w-4 text-[#F59E0B]" />
                           Cần phát triển
                         </div>
-                        {props.assessment.gaps.length > 0 ? (
+                        {focusedAssessment.gaps.length > 0 ? (
                           <ul className="mt-3 space-y-2 text-[13px] text-[#374151]">
-                            {props.assessment.gaps.map((g) => (
+                            {focusedAssessment.gaps.map((g) => (
                               <li key={g} className="flex items-start gap-2">
                                 <span className="mt-1 h-1.5 w-1.5 rounded-full bg-[#F59E0B]" />
                                 <span>{g}</span>
@@ -340,7 +369,7 @@ export function EmployeeProfileClient(props: {
                     </div>
 
                     <div className="mt-5 text-[13px] italic text-[#6B7280]">
-                      “Nhận xét quản lý: {props.assessment.managerNotes}”
+                      “Nhận xét quản lý: {focusedAssessment.managerNotes}”
                     </div>
                   </>
                 ) : (
@@ -355,7 +384,7 @@ export function EmployeeProfileClient(props: {
                 Kế hoạch Phát triển Cá nhân (IDP)
               </div>
 
-              {employee.idpStatus === "not-started" || !props.idp ? (
+              {focusedEmployee.idpStatus === "not-started" || !focusedIdp ? (
                 <div className="mt-6 flex flex-col items-center gap-3 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] px-6 py-8 text-center">
                   <FileText className="h-10 w-10 text-[#9CA3AF]" />
                   <div className="text-[14px] font-semibold text-[#374151]">
@@ -373,29 +402,29 @@ export function EmployeeProfileClient(props: {
                       <div className="text-[14px] text-[#6B7280]">
                         Vị trí mục tiêu:{" "}
                         <span className="font-semibold text-[#111827]">
-                          {positions.find((p) => p.id === props.idp!.targetPositionId)?.titleVi ?? "—"}
+                          {positions.find((p) => p.id === focusedIdp!.targetPositionId)?.titleVi ?? "—"}
                         </span>
                       </div>
                       <div className="mt-1 text-[13px] text-[#6B7280]">
-                        Duyệt bởi {props.idp!.approvedBy} · {props.idp!.createdDate}
+                        Duyệt bởi {focusedIdp!.approvedBy} · {focusedIdp!.createdDate}
                       </div>
                     </div>
                     <span
-                      className={`inline-flex items-center rounded-full px-3 py-1 text-[12px] font-semibold ${idpStatusBadge(props.idp!.status).className}`}
+                      className={`inline-flex items-center rounded-full px-3 py-1 text-[12px] font-semibold ${idpStatusBadge(focusedIdp!.status).className}`}
                     >
-                      {idpStatusBadge(props.idp!.status).label}
+                      {idpStatusBadge(focusedIdp!.status).label}
                     </span>
                   </div>
 
                   <div className="mt-4">
                     <div className="flex items-center justify-between">
                       <div className="text-[14px] font-semibold text-[#374151]">Tiến độ tổng thể</div>
-                      <div className="text-[14px] font-bold text-[#111827]">{props.idp!.progress}%</div>
+                      <div className="text-[14px] font-bold text-[#111827]">{focusedIdp!.progress}%</div>
                     </div>
                     <div className="mt-2 h-[12px] w-full rounded-full bg-[#E5E7EB]">
                       <div
-                        className={`h-[12px] rounded-full ${getScoreColor(props.idp!.progress)}`}
-                        style={{ width: `${props.idp!.progress}%` }}
+                        className={`h-[12px] rounded-full ${getScoreColor(focusedIdp!.progress)}`}
+                        style={{ width: `${focusedIdp!.progress}%` }}
                       />
                     </div>
                   </div>
@@ -404,7 +433,7 @@ export function EmployeeProfileClient(props: {
                     <div>
                       <div className="text-[14px] font-semibold text-[#374151]">Mục tiêu 12 tháng</div>
                       <ul className="mt-3 space-y-2 text-[13px] text-[#374151]">
-                        {props.idp!.shortTermGoals.map((g) => (
+                        {focusedIdp!.shortTermGoals.map((g) => (
                           <li key={g} className="flex items-start gap-2">
                             <ArrowRight className="h-4 w-4 text-[#14B8A6] mt-0.5" />
                             <span>{g}</span>
@@ -415,7 +444,7 @@ export function EmployeeProfileClient(props: {
                     <div>
                       <div className="text-[14px] font-semibold text-[#374151]">Mục tiêu 2–3 năm</div>
                       <ul className="mt-3 space-y-2 text-[13px] text-[#374151]">
-                        {props.idp!.midTermGoals.map((g) => (
+                        {focusedIdp!.midTermGoals.map((g) => (
                           <li key={g} className="flex items-start gap-2">
                             <Target className="h-4 w-4 text-[#4F46E5] mt-0.5" />
                             <span>{g}</span>
@@ -439,7 +468,7 @@ export function EmployeeProfileClient(props: {
                           </tr>
                         </thead>
                         <tbody className="[&>tr]:border-t [&>tr]:border-[#E5E7EB]">
-                          {props.idp!.activities.map((a) => {
+                          {focusedIdp!.activities.map((a) => {
                             const t = activityTypeBadge(a.type);
                             const s = activityStatusBadge(a.status);
                             return (
@@ -477,7 +506,7 @@ export function EmployeeProfileClient(props: {
             </div>
 
             {/* KTP quick card */}
-            {ktp ? (
+            {focusedKtp ? (
               <div className="so-card rounded-xl p-6">
                 <div className="flex items-center gap-2">
                   <GitMerge className="h-4 w-4 text-[#4F46E5]" />
@@ -490,22 +519,22 @@ export function EmployeeProfileClient(props: {
                     <div className="mt-2 flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <div className="truncate text-[14px] font-semibold text-[#111827]">
-                          {employees.find((e) => e.id === ktp.successorId)?.name ?? ktp.successorId}
+                          {employees.find((e) => e.id === focusedKtp.successorId)?.name ?? focusedKtp.successorId}
                         </div>
                         <div className="mt-1">
-                          <ReadinessBadge readiness={employees.find((e) => e.id === ktp.successorId)?.readiness ?? "1-2yr"} />
+                          <ReadinessBadge readiness={employees.find((e) => e.id === focusedKtp.successorId)?.readiness ?? "1-2yr"} />
                         </div>
                       </div>
                       <div className="text-right">
                         <div className="text-[13px] text-[#6B7280]">Đã transfer</div>
-                        <div className="mt-1 text-[16px] font-bold text-[#111827]">{ktp.holderProgress}%</div>
+                        <div className="mt-1 text-[16px] font-bold text-[#111827]">{focusedKtp.holderProgress}%</div>
                       </div>
                     </div>
                     <div className="mt-3 h-[8px] w-full rounded-full bg-[#E5E7EB]">
-                      <div className="h-[8px] rounded-full bg-[#14B8A6]" style={{ width: `${ktp.holderProgress}%` }} />
+                      <div className="h-[8px] rounded-full bg-[#14B8A6]" style={{ width: `${focusedKtp.holderProgress}%` }} />
                     </div>
                     <div className="mt-3 flex justify-end">
-                      <Link href={`/succession?tab=2&position=${ktp.positionId}`} className="text-[13px] font-semibold text-[#4F46E5] hover:underline">
+                      <Link href={`/succession?tab=2&position=${focusedKtp.positionId}`} className="text-[13px] font-semibold text-[#4F46E5] hover:underline">
                         Xem chi tiết →
                       </Link>
                     </div>
@@ -519,29 +548,29 @@ export function EmployeeProfileClient(props: {
                       <div className="mt-2 flex items-center justify-between gap-3">
                         <div className="min-w-0">
                           <div className="truncate text-[14px] font-semibold text-[#111827]">
-                            {employees.find((e) => e.id === ktp.holderId)?.name ?? ktp.holderId}
+                            {employees.find((e) => e.id === focusedKtp.holderId)?.name ?? focusedKtp.holderId}
                           </div>
                           <div className="mt-1 text-[13px] text-[#6B7280] truncate">
-                            {employees.find((e) => e.id === ktp.holderId)?.currentRoleTitle ?? "—"}
+                            {employees.find((e) => e.id === focusedKtp.holderId)?.currentRoleTitle ?? "—"}
                           </div>
                         </div>
                         <div className="text-right">
                           <div className="text-[13px] text-[#6B7280]">Đã tiếp nhận</div>
-                          <div className="mt-1 text-[16px] font-bold text-[#111827]">{ktp.successorProgress}%</div>
+                          <div className="mt-1 text-[16px] font-bold text-[#111827]">{focusedKtp.successorProgress}%</div>
                         </div>
                       </div>
                       <div className="mt-3 h-[8px] w-full rounded-full bg-[#E5E7EB]">
-                        <div className="h-[8px] rounded-full bg-[#F59E0B]" style={{ width: `${ktp.successorProgress}%` }} />
+                        <div className="h-[8px] rounded-full bg-[#F59E0B]" style={{ width: `${focusedKtp.successorProgress}%` }} />
                       </div>
                       <div className="mt-2 text-[13px] text-[#6B7280]">
-                        <span className="font-semibold text-[#111827]">{ktp.knowledgeItems.length}</span> mục tri thức ·{" "}
+                        <span className="font-semibold text-[#111827]">{focusedKtp.knowledgeItems.length}</span> mục tri thức ·{" "}
                         <span className="font-semibold text-[#111827]">
-                          {ktp.sessions.filter((s) => (s.completedItems?.length ?? 0) > 0).length}
+                          {focusedKtp.sessions.filter((s) => (s.completedItems?.length ?? 0) > 0).length}
                         </span>{" "}
                         buổi hoàn thành
                       </div>
                       <div className="mt-3 flex justify-end">
-                        <Link href={`/succession?tab=2&position=${ktp.positionId}`} className="text-[13px] font-semibold text-[#4F46E5] hover:underline">
+                        <Link href={`/succession?tab=2&position=${focusedKtp.positionId}`} className="text-[13px] font-semibold text-[#4F46E5] hover:underline">
                           Xem chi tiết →
                         </Link>
                       </div>
@@ -574,7 +603,7 @@ export function EmployeeProfileClient(props: {
 
               {openAudit ? (
                 <div className="mt-4">
-                  {employee.id !== "emp-006" ? (
+                  {focusedEmployee.id !== "emp-006" ? (
                     <div className="rounded-xl border border-dashed border-[#E5E7EB] bg-[#F9FAFB] px-6 py-8 text-center text-[13px] text-[#6B7280]">
                       Chưa có lịch sử thay đổi
                     </div>
@@ -689,103 +718,28 @@ export function EmployeeProfileClient(props: {
 
           {/* RIGHT 35% */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Succession */}
-            <div className="so-card rounded-xl p-6">
-              <div className="text-[16px] font-semibold text-[#374151]">Thông tin kế thừa</div>
-              <div className="mt-4 text-[14px] font-semibold text-[#374151]">Vị trí đang nhắm tới:</div>
-
-              {employee.targetPositionId && targetPosition ? (
-                <div className="mt-3 rounded-xl border border-[#E5E7EB] bg-[#F8F9FC] p-4">
-                  <div className="text-[14px] font-semibold text-[#111827]">{targetPosition.title}</div>
-                  <div className="mt-1 text-[13px] text-[#6B7280]">{targetPosition.titleVi}</div>
-                  <div className="mt-3 flex items-center justify-between gap-3">
-                    <ReadinessBadge readiness={employee.readiness} />
-                    <div className="text-[13px] text-[#6B7280]">
-                      Gap: <span className="font-semibold text-[#111827]">{selfCandidate?.gapScore ?? "—"}</span>/100
-                    </div>
-                  </div>
-
-                  {typeof selfCandidate?.gapScore === "number" ? (
-                    <div className="mt-3">
-                      <div className="h-[8px] w-full rounded-full bg-[#E5E7EB]">
-                        <div
-                          className="h-[8px] rounded-full bg-[#14B8A6]"
-                          style={{ width: `${Math.max(0, Math.min(100, 100 - selfCandidate.gapScore))}%` }}
-                        />
-                      </div>
-                      <div className="mt-2 text-[13px] text-[#6B7280]">
-                        {selfCandidate.gapScore <= 20
-                          ? "Gần sẵn sàng"
-                          : selfCandidate.gapScore <= 40
-                            ? "Đang phát triển tốt"
-                            : selfCandidate.gapScore <= 60
-                              ? "Cần thêm thời gian"
-                              : "Gap còn lớn"}
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              ) : (
-                <div className="mt-2 text-[13px] italic text-[#6B7280]">Chưa xác định</div>
-              )}
-
-              <div className="my-5 h-px bg-[#E5E7EB]" />
-
-              {mentor ? (
-                <div>
-                  <div className="text-[14px] font-semibold text-[#374151]">Người cố vấn:</div>
-                  <div className="mt-3 flex items-center gap-3">
-                    <EmployeeAvatar employee={mentor} size="sm" />
-                    <div className="min-w-0">
-                      <div className="truncate font-semibold text-[#111827]">{mentor.name}</div>
-                      <div className="truncate text-[13px] text-[#6B7280]">
-                        {mentor.currentRoleTitle ?? "—"}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-
-              {mentees.length > 0 ? (
-                <div className={mentor ? "mt-5" : ""}>
-                  <div className="text-[14px] font-semibold text-[#374151]">Đang kèm cặp:</div>
-                  <div className="mt-3 space-y-3">
-                    {mentees.map((m) => (
-                      <div key={m!.id} className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <EmployeeAvatar employee={m!} size="sm" />
-                          <div className="truncate font-medium text-[#111827]">{m!.name}</div>
-                        </div>
-                        <TierBadge tier={m!.tier} />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-
             {/* Project */}
             <div className="so-card rounded-xl p-6">
               <div className="text-[16px] font-semibold text-[#374151]">Dự án hiện tại</div>
-              {props.project ? (
+              {focusedProject ? (
                 <div className="mt-4 space-y-2 text-[14px] text-[#374151]">
-                  <div className="text-[14px] font-semibold text-[#111827]">{props.project.name}</div>
+                  <div className="text-[14px] font-semibold text-[#111827]">{focusedProject.name}</div>
                   <div className="inline-flex items-center rounded-full bg-[#F9FAFB] px-3 py-1 text-[12px] font-semibold text-[#374151] border border-[#E5E7EB]">
-                    {props.project.type}
+                    {focusedProject.type}
                   </div>
                   <div className="mt-3 text-[13px] text-[#6B7280]">
-                    Vai trò: <span className="font-medium text-[#374151]">{employee.projectRole ?? "—"}</span>
+                    Vai trò: <span className="font-medium text-[#374151]">{focusedEmployee.projectRole ?? "—"}</span>
                   </div>
                   <div className="text-[13px] text-[#6B7280]">
-                    Khách hàng: <span className="font-medium text-[#374151]">{props.project.client}</span>
+                    Khách hàng: <span className="font-medium text-[#374151]">{focusedProject.client}</span>
                   </div>
                   <div className="text-[13px] text-[#6B7280]">
-                    Giá trị HĐ: <span className="font-medium text-[#374151]">{props.project.contractValue}</span>
+                    Giá trị HĐ: <span className="font-medium text-[#374151]">{focusedProject.contractValue}</span>
                   </div>
                   <div className="text-[13px] text-[#6B7280]">
                     Trạng thái:{" "}
                     <span className="inline-flex items-center rounded-full bg-[#F0FDF4] px-3 py-1 text-[12px] font-semibold text-[#15803D]">
-                      {props.project.status}
+                      {focusedProject.status}
                     </span>
                   </div>
                 </div>
@@ -800,30 +754,45 @@ export function EmployeeProfileClient(props: {
               <div className="mt-4 grid grid-cols-2 gap-4">
                 <div className="rounded-xl border border-[#E5E7EB] bg-white p-4">
                   <div className="text-[13px] text-[#6B7280]">Giờ đào tạo/năm</div>
-                  <div className="mt-2 text-[20px] font-bold text-[#111827]">{employee.trainingHoursLastYear} giờ</div>
+                  <div className="mt-2 text-[20px] font-bold text-[#111827]">{focusedEmployee.trainingHoursLastYear} giờ</div>
                 </div>
                 <div className="rounded-xl border border-[#E5E7EB] bg-white p-4">
                   <div className="text-[13px] text-[#6B7280]">Thăng chức gần nhất</div>
-                  <div className="mt-2 text-[20px] font-bold text-[#111827]">{employee.lastPromotionYear}</div>
+                  <div className="mt-2 text-[20px] font-bold text-[#111827]">{focusedEmployee.lastPromotionYear}</div>
                 </div>
                 <div className="rounded-xl border border-[#E5E7EB] bg-white p-4">
                   <div className="text-[13px] text-[#6B7280]">Tiến độ IDP</div>
-                  <div className="mt-2 text-[20px] font-bold text-[#111827]">{employee.idpProgress}%</div>
+                  <div className="mt-2 text-[20px] font-bold text-[#111827]">{focusedEmployee.idpProgress}%</div>
                 </div>
                 <div className="rounded-xl border border-[#E5E7EB] bg-white p-4">
                   <div className="text-[13px] text-[#6B7280]">Risk Score</div>
-                  <div className={`mt-2 text-[20px] font-bold ${getRiskColor(employee.riskLevel)}`}>
-                    {employee.riskScore} / 100
+                  <div className={`mt-2 text-[20px] font-bold ${getRiskColor(focusedEmployee.riskLevel)}`}>
+                    {focusedEmployee.riskScore} / 100
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Market Intel */}
-            {showMarketTab ? <MarketIntelCard employeeId={employee.id} /> : null}
+            {showMarketTab ? <MarketIntelCard employeeId={focusedEmployee.id} /> : null}
+          </div>
+      </div>
+
+      {showAICareerPath ? (
+        <div className="so-card rounded-xl overflow-hidden">
+          <div className="flex items-center gap-2 border-b border-[#E5E7EB] bg-[#FAFAFF] px-5 py-3">
+            <Sparkles className="h-4 w-4 text-[#4F46E5]" aria-hidden />
+            <span className="text-[14px] font-semibold text-[#374151]">Lộ trình AI</span>
+            <span className="ml-1 rounded-full bg-[#4F46E5] px-1.5 py-0.5 text-[10px] font-bold text-white">
+              AI
+            </span>
+          </div>
+          <div className="p-5 sm:p-6">
+            <CareerPathTab employeeId={focusedEmployee.id} />
           </div>
         </div>
-      )}
+      ) : null}
+      </div>
     </div>
   );
 }
