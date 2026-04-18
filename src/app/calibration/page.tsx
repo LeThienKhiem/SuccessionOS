@@ -198,7 +198,7 @@ export default function CalibrationPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="w-full space-y-6">
       {/* Header */}
       <div className="space-y-2">
         <p className="text-[13px] text-[#6B7280]">Phát triển · Họp hiệu chỉnh</p>

@@ -32,7 +32,7 @@ export default async function TalentProfilePage({ params }: PageProps) {
   const marketData = marketIntelData.find((m) => m.employeeId === employee.id);
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="w-full space-y-6">
       {/* BREADCRUMB */}
       <div className="flex items-center gap-2 text-[13px] text-[#6B7280]">
         <Link href="/talent" className="hover:underline">

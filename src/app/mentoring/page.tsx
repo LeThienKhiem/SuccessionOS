@@ -526,7 +526,7 @@ export default function MentoringPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="w-full space-y-6">
       <div className="space-y-2">
         <p className="text-[13px] text-[#6B7280]">Phát triển</p>
         <h1 className="text-[24px] font-semibold text-[#111827]">Kèm cặp &amp; Cố vấn</h1>

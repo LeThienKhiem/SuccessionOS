@@ -27,8 +27,8 @@ export default function RootLayout({
             {/* Spacer for fixed sidebar (desktop/tablet only) */}
             <div className="w-[220px] lg:w-[220px] md:w-16 max-md:hidden flex-shrink-0" />
             <AppSidebar />
-            <main className="flex-1 min-w-0 overflow-auto bg-[#F8F9FC]">
-              <div className="w-full 2xl:max-w-[1600px] 2xl:mx-auto p-8 max-lg:p-4 max-sm:p-3">
+            <main className="flex min-w-0 flex-1 flex-col overflow-auto bg-[#F8F9FC]">
+              <div className="box-border w-full px-8 py-6 max-lg:px-6 max-sm:px-4 max-sm:py-5">
                 {children}
               </div>
             </main>

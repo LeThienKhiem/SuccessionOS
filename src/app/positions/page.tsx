@@ -225,7 +225,7 @@ export default function PositionsPage() {
       : "bg-white text-[#6B7280] border-[#E5E7EB] hover:bg-[#F3F4F6]";
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="w-full space-y-6">
       {/* HEADER */}
       <div className="space-y-2">
         <p className="text-[13px] text-[#6B7280]">Vị trí then chốt</p>

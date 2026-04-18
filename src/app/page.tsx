@@ -64,7 +64,7 @@ export default function Home() {
     lvl === "director" ? "Director" : lvl === "manager" ? "Manager" : "Lead";
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="w-full space-y-6">
       {/* SECTION 1: Page header */}
       <div className="space-y-2">
         <p className="text-[13px] text-[#6B7280]">Trang chủ</p>
@@ -78,7 +78,10 @@ export default function Home() {
       </div>
 
       {/* SECTION 2: KPI cards */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
+      <div
+        className="grid gap-4"
+        style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}
+      >
         <StatsCard
           icon={Users}
           iconColor="#6366F1"

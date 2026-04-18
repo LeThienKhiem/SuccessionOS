@@ -63,6 +63,12 @@ const MENTOR_NODE_Y = H / 2 - 10;
 const KTP_NODE_X = 72;
 const KTP_NODE_Y = H / 2 - 10;
 
+/** Dưới — IDP (cao hơn) và hàng successor (thấp hơn) để không chồng node. */
+const IDP_NODE_Y = H - 100;
+const SUCCESSOR_ROW_Y = H - 48;
+/** Nhãn dưới successor, dưới tâm node đủ xa. */
+const SUCCESSOR_LABEL_Y = H - 14;
+
 export type NetworkTooltip = {
   title: string;
   lines: string[];
@@ -128,6 +134,21 @@ export function TalentProfileNetworkDiagramSvg({
 }) {
   const [hovered, setHovered] = React.useState<string | null>(null);
   const [mousePos, setMousePos] = React.useState({ x: 0, y: 0 });
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [containerSize, setContainerSize] = React.useState({ w: 600, h: 400 });
+
+  React.useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const measure = () => {
+      const { width, height } = el.getBoundingClientRect();
+      setContainerSize({ w: width, h: height });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const {
     pairAsMentee,
@@ -282,7 +303,7 @@ export function TalentProfileNetworkDiagramSvg({
     const idpNode: SvgNode = {
       id: "idp",
       x: W / 2,
-      y: H - 72,
+      y: IDP_NODE_Y,
       size: 38,
       gradient: ["#FBBF24", "#D97706"],
       label: "IDP",
@@ -342,7 +363,7 @@ export function TalentProfileNetworkDiagramSvg({
       return {
         id: `successor-${m.id}`,
         x: menteeX(i, positionSuccessors.length),
-        y: H - 50,
+        y: SUCCESSOR_ROW_Y,
         size: 32,
         gradient: [g0, g1] as [string, string],
         label: m.initials,
@@ -426,11 +447,9 @@ export function TalentProfileNetworkDiagramSvg({
     >;
   }, [nodes, positionSuccessors]);
 
-  const hoveredNode = hovered ? nodes.find((n) => n.id === hovered) : undefined;
-  const tip = hoveredNode?.tooltip;
-
   return (
     <div
+      ref={containerRef}
       style={{ position: "relative", width: "100%" }}
       onMouseMove={(e) => {
         const rect = e.currentTarget.getBoundingClientRect();
@@ -637,7 +656,7 @@ export function TalentProfileNetworkDiagramSvg({
             <text
               key={`lbl-${m.id}`}
               x={nx}
-              y={H - 20}
+              y={SUCCESSOR_LABEL_Y}
               textAnchor="middle"
               fill="#6B7280"
               fontSize={9}
@@ -651,48 +670,61 @@ export function TalentProfileNetworkDiagramSvg({
         })}
       </svg>
 
-      {hovered && tip
-        ? (() => {
-            const offsetX = mousePos.x > 300 ? -180 : 16;
-            const offsetY = mousePos.y > 200 ? -120 : 16;
-            const lines = tip.lines.filter(Boolean);
-            return (
-              <div
-                style={{
-                  position: "absolute",
-                  left: mousePos.x + offsetX,
-                  top: mousePos.y + offsetY,
-                  background: "#1E1B4B",
-                  color: "#fff",
-                  padding: "10px 12px",
-                  borderRadius: 10,
-                  fontSize: 12,
-                  lineHeight: 1.6,
-                  minWidth: 160,
-                  maxWidth: 220,
-                  zIndex: 50,
-                  pointerEvents: "none",
-                  boxShadow: "0 4px 20px rgba(0,0,0,0.25)",
-                  borderTop: `3px solid ${tip.color}`,
-                }}
-              >
-                <div style={{ fontWeight: 700, marginBottom: 4, color: tip.color }}>{tip.title}</div>
-                {lines.map((l, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      color:
-                        i === lines.length - 1 && l.startsWith("→") ? "#A5B4FC" : "#C7D2FE",
-                      fontSize: 11,
-                    }}
-                  >
-                    {l}
-                  </div>
-                ))}
-              </div>
-            );
-          })()
-        : null}
+      {hovered &&
+        (() => {
+          const node = nodes.find((n) => n.id === hovered);
+          if (!node?.tooltip) return null;
+          const { title, lines, color } = node.tooltip;
+          const lineList = lines.filter(Boolean);
+
+          const TW = 200;
+          const TH = 30 + lineList.length * 18;
+          const { w: cw, h: ch } = containerSize;
+
+          const goLeft = mousePos.x + TW + 16 > cw;
+          const goUp = mousePos.y + TH + 16 > ch;
+
+          let left = goLeft ? mousePos.x - TW - 8 : mousePos.x + 16;
+          let top = goUp ? mousePos.y - TH - 8 : mousePos.y + 16;
+          const pad = 8;
+          left = Math.max(pad, Math.min(left, Math.max(pad, cw - TW - pad)));
+          top = Math.max(pad, Math.min(top, Math.max(pad, ch - TH - pad)));
+
+          return (
+            <div
+              style={{
+                position: "absolute",
+                left,
+                top,
+                background: "#1E1B4B",
+                color: "#fff",
+                padding: "10px 12px",
+                borderRadius: 10,
+                fontSize: 12,
+                lineHeight: 1.6,
+                width: TW,
+                boxSizing: "border-box",
+                zIndex: 50,
+                pointerEvents: "none",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.25)",
+                borderTop: `3px solid ${color}`,
+              }}
+            >
+              <div style={{ fontWeight: 700, marginBottom: 4, color }}>{title}</div>
+              {lineList.map((l, i) => (
+                <div
+                  key={i}
+                  style={{
+                    color: l.startsWith("→") ? "#A5B4FC" : "#C7D2FE",
+                    fontSize: 11,
+                  }}
+                >
+                  {l}
+                </div>
+              ))}
+            </div>
+          );
+        })()}
     </div>
   );
 }

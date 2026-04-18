@@ -61,7 +61,7 @@ export function EmployeeTabNav(props: {
       {tab === "overview" ? (
         <>{props.overview}</>
       ) : (
-        <div className="max-w-6xl mx-auto">
+        <div className="w-full">
           <CareerPathTab employeeId={props.employeeId} />
         </div>
       )}
