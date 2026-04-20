@@ -13,6 +13,8 @@ import {
   buildHrm360AccordionView,
   pickLatestAssessment,
 } from "@/components/talent/talentProfileHrm360FromAssessment";
+import { getMarketIntelligence } from "@/data/marketIntelligence";
+import { MarketIntelligenceCard } from "@/components/talent/MarketIntelligenceCard";
 
 export function TalentProfileZoneCRiskHrm(props: {
   employee: Employee;
@@ -32,6 +34,8 @@ export function TalentProfileZoneCRiskHrm(props: {
 
   const totalScore = hrmView?.totalScore ?? 0;
   const criteria = hrmView?.criteria ?? [];
+
+  const mi = React.useMemo(() => getMarketIntelligence(employee), [employee]);
 
   return (
     <div className="mt-4">
@@ -261,6 +265,24 @@ export function TalentProfileZoneCRiskHrm(props: {
           </div>
         )}
       </AccordionSection>
+
+      {marketIntelActive ? (
+        <AccordionSection
+          employeeId={employee.id}
+          icon="📈"
+          title="Thị trường & Rủi ro nhân sự"
+          badge={
+            mi.salaryGapVsMarket < -8
+              ? `Lương -${Math.abs(mi.salaryGapVsMarket)}% thị trường`
+              : `Scarcity ${mi.talentScarcity}%`
+          }
+          badgeBg={mi.salaryGapVsMarket < -8 ? "#FEE2E2" : "#EEF2FF"}
+          badgeColor={mi.salaryGapVsMarket < -8 ? "#991B1B" : "#4F46E5"}
+          alert={mi.salaryGapVsMarket < -8}
+        >
+          <MarketIntelligenceCard data={mi} />
+        </AccordionSection>
+      ) : null}
     </div>
   );
 }

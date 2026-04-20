@@ -16,7 +16,6 @@ import {
 
 import type { Assessment, Employee, IDP, Project, SuccessionEntry } from "@/data/types";
 import type { KnowledgeTransferPlan } from "@/data/knowledgeTransfer";
-import type { MarketIntelData } from "@/data/marketIntelligence";
 import { employees } from "@/data/employees";
 import { departments, positions } from "@/data/positions";
 import { assessments, getRiskColor, getScoreColor } from "@/data/assessments";
@@ -30,7 +29,6 @@ import { TalentProfileHero } from "@/components/talent/TalentProfileHero";
 import { TalentProfileNetworkSuccessionCard } from "@/components/talent/TalentProfileNetworkSuccessionCard";
 import { TalentProfileRadarCard } from "@/components/talent/TalentProfileRadarCard";
 import { TalentProfileZoneCRiskHrm } from "@/components/talent/TalentProfileZoneCRiskHrm";
-import { MarketIntelCard } from "@/components/MarketIntelCard";
 import { ReadinessBadge } from "@/components/ReadinessBadge";
 import { RiskWarningBanner } from "@/components/RiskWarningBanner";
 import { ScoreBar } from "@/components/ScoreBar";
@@ -100,7 +98,6 @@ export function EmployeeProfileClient(props: {
   ktp?: KnowledgeTransferPlan;
   project?: Project;
   successionEntry?: SuccessionEntry;
-  marketIntelData?: MarketIntelData;
 }) {
   const { isActive } = useModuleContext();
 
@@ -773,8 +770,6 @@ export function EmployeeProfileClient(props: {
               </div>
             </div>
 
-            {/* Market Intel */}
-            {showMarketTab ? <MarketIntelCard employeeId={focusedEmployee.id} /> : null}
           </div>
       </div>
 

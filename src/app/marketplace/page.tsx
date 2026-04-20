@@ -10,7 +10,6 @@ import {
   Building2,
   CheckCircle,
   CheckSquare,
-  DollarSign,
   FileCheck,
   GitBranch,
   GitFork,
@@ -434,10 +433,11 @@ function iconTone(m: MarketplaceModule) {
   return { bg: "#F3F4F6", color: "#6B7280" };
 }
 
-function priceBlock(m: MarketplaceModule) {
+/** Chỉ hiển thị cho Core (0đ) hoặc Enterprise (liên hệ). Module trả phí: ẩn giá trên UI demo. */
+function priceBlock(m: MarketplaceModule): { main: string; sub: string; mainCls: string } | null {
   if (m.price === 0) return { main: "Miễn phí", sub: "Bắt buộc", mainCls: "text-[#15803D]" };
   if (m.price === null) return { main: "Liên hệ", sub: "", mainCls: "text-[#B45309]" };
-  return { main: `$${m.price}`, sub: "/tháng", mainCls: "text-[#111827]" };
+  return null;
 }
 
 function overlayModal(props: {
@@ -559,10 +559,7 @@ export default function MarketplacePage() {
     const available = modules.filter((m) => m.status === "available").length;
     const enterprise = modules.filter((m) => m.status === "enterprise").length;
     const total = modules.length;
-    const currentCost = modules
-      .filter((m) => m.status === "active" && typeof m.price === "number" && m.price > 0)
-      .reduce((sum, m) => sum + (m.price as number), 0);
-    return { active, available, enterprise, total, currentCost };
+    return { active, available, enterprise, total };
   }, [modules]);
 
   const pillClass = (active: boolean) =>
@@ -583,7 +580,7 @@ export default function MarketplacePage() {
       </div>
 
       {/* SUMMARY BAR */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="so-card rounded-xl p-5">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -605,20 +602,6 @@ export default function MarketplacePage() {
             </div>
             <div className="h-10 w-10 rounded-xl bg-[#F0FDFA] grid place-items-center">
               <Plus className="h-5 w-5 text-[#14B8A6]" />
-            </div>
-          </div>
-        </div>
-        <div className="so-card rounded-xl p-5">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="text-[16px] font-semibold text-[#374151]">Tổng chi phí hiện tại</div>
-              <div className="mt-2 text-[32px] font-bold text-[#111827]">
-                ${counts.currentCost}/tháng
-              </div>
-              <div className="mt-2 text-[13px] text-[#6B7280]">không tính Core Platform</div>
-            </div>
-            <div className="h-10 w-10 rounded-xl bg-[#FFFBEB] grid place-items-center">
-              <DollarSign className="h-5 w-5 text-[#F59E0B]" />
             </div>
           </div>
         </div>
@@ -709,7 +692,7 @@ export default function MarketplacePage() {
                         };
                       }
                       return {
-                        text: "Thêm vào gói — $20/tháng",
+                        text: "Thêm vào gói",
                         variant: "default" as const,
                         disabled: false,
                         title: "",
@@ -735,7 +718,7 @@ export default function MarketplacePage() {
                         };
                       }
                       return {
-                        text: "Thêm vào gói — $99/tháng",
+                        text: "Thêm vào gói",
                         variant: "default" as const,
                         disabled: false,
                         title: "",
@@ -834,22 +817,21 @@ export default function MarketplacePage() {
 
                       {/* CARD FOOTER */}
                       <div className="border-t border-dashed border-[#E5E7EB] px-4 py-3">
-                        <div className="flex items-center justify-between gap-4">
-                          <div>
-                            {m.price === 0 ? (
-                              <>
+                        <div
+                          className={`flex items-center gap-4 ${price ? "justify-between" : "justify-end"}`}
+                        >
+                          {price ? (
+                            <div>
+                              {m.price === 0 ? (
+                                <>
+                                  <div className={`text-[14px] font-semibold ${price.mainCls}`}>{price.main}</div>
+                                  <div className="text-[11px] text-[#6B7280]">Bắt buộc</div>
+                                </>
+                              ) : (
                                 <div className={`text-[14px] font-semibold ${price.mainCls}`}>{price.main}</div>
-                                <div className="text-[11px] text-[#6B7280]">Bắt buộc</div>
-                              </>
-                            ) : m.price === null ? (
-                              <div className={`text-[14px] font-semibold ${price.mainCls}`}>{price.main}</div>
-                            ) : (
-                              <div className="flex items-end gap-2">
-                                <div className={`text-[18px] font-bold ${price.mainCls}`}>{price.main}</div>
-                                <div className="pb-0.5 text-[12px] text-[#6B7280]">{price.sub}</div>
-                              </div>
-                            )}
-                          </div>
+                              )}
+                            </div>
+                          ) : null}
 
                           <Button
                             variant={action.variant}
@@ -897,8 +879,8 @@ export default function MarketplacePage() {
                 </li>
               ))}
             </ul>
-            <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-[13px] text-[#374151]">
-              <span className="font-semibold">$20 / tháng</span> · Hủy bất kỳ lúc nào
+            <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-[13px] text-[#6B7280]">
+              Hủy bất kỳ lúc nào
             </div>
           </div>
         ),
@@ -967,8 +949,8 @@ export default function MarketplacePage() {
                 </li>
               ))}
             </ul>
-            <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-[13px] text-[#374151]">
-              <span className="font-semibold">$99 / tháng</span> · Hủy bất kỳ lúc nào
+            <div className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-[13px] text-[#6B7280]">
+              Hủy bất kỳ lúc nào
             </div>
           </div>
         ),

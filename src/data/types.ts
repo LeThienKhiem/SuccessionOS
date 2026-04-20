@@ -34,6 +34,21 @@ export interface Position {
   minReadinessRequired: Readiness
 }
 
+// ── Market Intelligence (Talent profile / LinkedIn-style %) ──
+export interface MarketIntelligence {
+  /** % so với thị trường — dương = cao hơn */
+  profileViewsVsMarket: number
+  /** % tần suất được headhunt so với thị trường */
+  headhuntFreqVsMarket: number
+  /** % lương vs market — âm = thấp hơn */
+  salaryGapVsMarket: number
+  /** 0–100 độ khan hiếm talent */
+  talentScarcity: number
+  demandTrend: 'increasing' | 'stable' | 'decreasing'
+  lastUpdated: string
+  sources: string[]
+}
+
 // ── Employee ─────────────────────────────────────────────────
 export interface Employee {
   id: string
@@ -81,6 +96,9 @@ export interface Employee {
   // Relationships
   mentorId?: string
   menteeIds?: string[]
+
+  /** Ghi đè tùy chọn; mặc định lấy từ `marketIntelligenceData` qua `getMarketIntelligence` */
+  marketIntelligence?: MarketIntelligence
 }
 
 // ── Assessment detail (per employee per cycle) ───────────────

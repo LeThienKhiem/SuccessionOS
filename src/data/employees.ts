@@ -1,4 +1,6 @@
 import type { Employee } from './types'
+import { DEFAULT_MARKET_INTELLIGENCE } from './marketIntelligence'
+import { marketIntelligenceData } from './marketIntelligenceData'
 
 // ============================================================
 // Employees — 25 nhân viên trong Chuỗi Phát triển Nhân tài
@@ -8,7 +10,7 @@ import type { Employee } from './types'
 // riskScore: 0=safe, 100=very likely to leave
 // ============================================================
 
-export const employees: Employee[] = [
+const employeesSeed: Employee[] = [
 
   // ──────────────────────────────────────────────────────────
   // TẦNG NÒNG CỐT (8 người) — đang giữ vị trí then chốt
@@ -230,7 +232,7 @@ export const employees: Employee[] = [
     riskScore: 62,
     riskLevel: 'high',
     internalRiskFactors: ['Chưa thăng chức 4 năm'],
-    marketRiskFactors: ['Được tiếp cận bởi headhunter 2 lần', 'Lương thấp hơn thị trường ~15%'],
+    marketRiskFactors: [],
 
     currentProjectId: 'proj-002',
     projectRole: 'Lead Structural Engineer',
@@ -972,3 +974,8 @@ export const employees: Employee[] = [
     menteeIds: [],
   },
 ]
+
+export const employees: Employee[] = employeesSeed.map((emp) => ({
+  ...emp,
+  marketIntelligence: marketIntelligenceData[emp.id] ?? DEFAULT_MARKET_INTELLIGENCE,
+}))

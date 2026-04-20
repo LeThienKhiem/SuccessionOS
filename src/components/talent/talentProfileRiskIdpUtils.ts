@@ -1,5 +1,11 @@
 import type { Employee, IDP } from "@/data/types";
 import { employees } from "@/data/employees";
+import {
+  filterQualitativeMarketRiskFactors,
+  getMarketIntelligence,
+  marketIntelligenceRiskHeadhuntLabel,
+  marketIntelligenceRiskSalaryLabel,
+} from "@/data/marketIntelligence";
 
 export type RiskFactorRow = {
   id: string;
@@ -54,7 +60,26 @@ export function buildRiskFactorRows(employee: Employee, marketIntelActive: boole
     });
   }
   if (marketIntelActive) {
-    for (const label of employee.marketRiskFactors ?? []) {
+    const mi = getMarketIntelligence(employee);
+    rows.push({
+      id: "mk-headhunt",
+      label: marketIntelligenceRiskHeadhuntLabel(mi),
+      severity:
+        mi.headhuntFreqVsMarket >= 30 ? "high" : mi.headhuntFreqVsMarket >= 20 ? "medium" : "low",
+      source: "hr_noted",
+      notedAt: mi.lastUpdated,
+      detailNote: "Theo Market Intelligence (LinkedIn / Talentnet)",
+    });
+    rows.push({
+      id: "mk-salary",
+      label: marketIntelligenceRiskSalaryLabel(mi),
+      severity:
+        mi.salaryGapVsMarket < -8 ? "high" : mi.salaryGapVsMarket < 0 ? "medium" : "low",
+      source: "hr_noted",
+      notedAt: mi.lastUpdated,
+      detailNote: "Theo Market Intelligence (LinkedIn / Talentnet)",
+    });
+    for (const label of filterQualitativeMarketRiskFactors(employee)) {
       rows.push({
         id: `mk-${i++}`,
         label,

@@ -5,6 +5,12 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, BarChart2, Store } from "lucide-react";
 import type { Employee } from "@/data/types";
 import { useModuleContext } from "@/context/ModuleContext";
+import {
+  filterQualitativeMarketRiskFactors,
+  getMarketIntelligence,
+  marketIntelligenceRiskHeadhuntLabel,
+  marketIntelligenceRiskSalaryLabel,
+} from "@/data/marketIntelligence";
 
 export function RiskWarningBanner({ employee }: { employee: Employee }) {
   const router = useRouter();
@@ -17,7 +23,17 @@ export function RiskWarningBanner({ employee }: { employee: Employee }) {
   const internal = employee.internalRiskFactors ?? [];
   const market = employee.marketRiskFactors ?? [];
 
-  const visible = marketActive ? [...internal, ...market] : [...internal];
+  const marketPills = React.useMemo(() => {
+    if (!marketActive) return market;
+    const mi = getMarketIntelligence(employee);
+    return [
+      marketIntelligenceRiskHeadhuntLabel(mi),
+      marketIntelligenceRiskSalaryLabel(mi),
+      ...filterQualitativeMarketRiskFactors(employee),
+    ];
+  }, [marketActive, employee]);
+
+  const visible = marketActive ? [...internal, ...marketPills] : [...internal];
 
   const marketLockedPill =
     !marketActive && market.length > 0 ? (
@@ -53,7 +69,7 @@ export function RiskWarningBanner({ employee }: { employee: Employee }) {
               ))}
 
               {marketActive
-                ? market.map((f) => (
+                ? marketPills.map((f) => (
                     <span
                       key={`mk-${f}`}
                       title="Nguồn: Market Intelligence"

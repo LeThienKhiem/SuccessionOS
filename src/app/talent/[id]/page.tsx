@@ -5,8 +5,6 @@ import { employees } from "@/data/employees";
 import { assessments } from "@/data/assessments";
 import { idps, projects, successionMap } from "@/data/succession";
 import { knowledgeTransferPlans } from "@/data/knowledgeTransfer";
-import { marketIntelData } from "@/data/marketIntelligence";
-
 import { EmployeeProfileClient } from "@/components/EmployeeProfileClient";
 
 type PageProps = {
@@ -29,8 +27,6 @@ export default async function TalentProfilePage({ params }: PageProps) {
   const successionEntry = employee.targetPositionId
     ? successionMap.find((s) => s.positionId === employee.targetPositionId)
     : undefined;
-  const marketData = marketIntelData.find((m) => m.employeeId === employee.id);
-
   return (
     <div className="w-full space-y-6">
       {/* BREADCRUMB */}
@@ -49,7 +45,6 @@ export default async function TalentProfilePage({ params }: PageProps) {
         ktp={ktp}
         project={project}
         successionEntry={successionEntry}
-        marketIntelData={marketData}
       />
     </div>
   );

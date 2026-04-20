@@ -1,3 +1,49 @@
+import type { Employee, MarketIntelligence } from "./types";
+import { marketIntelligenceData } from "./marketIntelligenceData";
+
+/** Fallback khi không có trong `marketIntelligenceData` (vd. nhân viên mới) */
+export const DEFAULT_MARKET_INTELLIGENCE: MarketIntelligence = {
+  profileViewsVsMarket: 8,
+  headhuntFreqVsMarket: 10,
+  salaryGapVsMarket: -3,
+  talentScarcity: 72,
+  demandTrend: "stable",
+  lastUpdated: "03/2026",
+  sources: ["LinkedIn Talent Insights"],
+};
+
+export function getMarketIntelligence(employee: Employee): MarketIntelligence {
+  return (
+    marketIntelligenceData[employee.id] ??
+    employee.marketIntelligence ??
+    DEFAULT_MARKET_INTELLIGENCE
+  );
+}
+
+/** Chuỗi mock cũ đã thay bằng % từ Market Intelligence */
+function isLegacyMarketIntelRedundant(text: string): boolean {
+  const t = text.toLowerCase();
+  if (t.includes("headhunter")) return true;
+  if (t.includes("lần") && (t.includes("tiếp cận") || t.includes("tiep can"))) return true;
+  if (t.includes("lương") && (t.includes("thị trường") || t.includes("thi truong"))) return true;
+  return false;
+}
+
+/** Yếu tố thị trường định tính (giữ), không trùng với headhunt/lương % */
+export function filterQualitativeMarketRiskFactors(employee: Employee): string[] {
+  return (employee.marketRiskFactors ?? []).filter((f) => !isLegacyMarketIntelRedundant(f));
+}
+
+export function marketIntelligenceRiskHeadhuntLabel(mi: MarketIntelligence): string {
+  return `+${mi.headhuntFreqVsMarket}% tần suất tiếp cận từ recruiter vs thị trường`;
+}
+
+export function marketIntelligenceRiskSalaryLabel(mi: MarketIntelligence): string {
+  return mi.salaryGapVsMarket >= 0
+    ? `+${mi.salaryGapVsMarket}% lương vs thị trường`
+    : `${mi.salaryGapVsMarket}% lương vs thị trường`;
+}
+
 export interface MarketIntelData {
   employeeId: string;
 
