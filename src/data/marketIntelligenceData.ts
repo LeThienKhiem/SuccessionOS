@@ -228,3 +228,17 @@ export const marketIntelligenceData: Record<string, MarketIntelligence> = {
     sources: ["LinkedIn Talent Insights"],
   },
 };
+
+export const DEFAULT_MARKET_INTEL: MarketIntelligence = {
+  profileViewsVsMarket: 8,
+  headhuntFreqVsMarket: 10,
+  salaryGapVsMarket: -3,
+  talentScarcity: 68,
+  demandTrend: "stable",
+  lastUpdated: "03/2026",
+  sources: ["LinkedIn Talent Insights"],
+};
+
+export function getMarketIntel(empId: string): MarketIntelligence {
+  return marketIntelligenceData[empId] ?? DEFAULT_MARKET_INTEL;
+}

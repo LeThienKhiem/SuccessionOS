@@ -1,11 +1,5 @@
 import type { Employee, IDP } from "@/data/types";
 import { employees } from "@/data/employees";
-import {
-  filterQualitativeMarketRiskFactors,
-  getMarketIntelligence,
-  marketIntelligenceRiskHeadhuntLabel,
-  marketIntelligenceRiskSalaryLabel,
-} from "@/data/marketIntelligence";
 
 export type RiskFactorRow = {
   id: string;
@@ -18,14 +12,18 @@ export type RiskFactorRow = {
 
 function inferSeverity(label: string, riskScore: number): "high" | "medium" | "low" {
   const t = label.toLowerCase();
-  if (t.includes("headhunter") || t.includes("lương") || riskScore >= 60) return "high";
+  if (t.includes("headhunter") || t.includes("lương")) return "high";
+  if (t.includes("thăng chức")) return "high";
+  if (t.includes("ktp")) return "medium";
+  if (t.includes("mentor")) return "medium";
   if (t.includes("năm") || t.includes("idp") || riskScore >= 45) return "medium";
   return "low";
 }
 
 function inferSource(label: string, isMarket: boolean): RiskFactorRow["source"] {
   if (isMarket) return "hr_noted";
-  if (/tự|hệ thống|auto|năm|thăng chức/i.test(label)) return "system_computed";
+  if (/mentor/i.test(label)) return "hr_noted";
+  if (/ktp|tự|hệ thống|auto|năm|thăng chức/i.test(label)) return "system_computed";
   return "manager_noted";
 }
 
@@ -42,10 +40,12 @@ export function riskSourceBadgeShort(s: RiskFactorRow["source"]): string {
   return "HR";
 }
 
-export function buildRiskFactorRows(employee: Employee, marketIntelActive: boolean): RiskFactorRow[] {
+/** Chỉ yếu tố nội bộ — thị trường nằm ở accordion Market Intelligence */
+export function buildRiskFactorRows(employee: Employee): RiskFactorRow[] {
   const rows: RiskFactorRow[] = [];
   let i = 0;
   for (const label of employee.internalRiskFactors ?? []) {
+    const lower = label.toLowerCase();
     rows.push({
       id: `in-${i++}`,
       label,
@@ -54,41 +54,14 @@ export function buildRiskFactorRows(employee: Employee, marketIntelActive: boole
       notedAt: label.includes("năm") ? `Từ ${employee.lastPromotionYear}` : "Q1/2025",
       detailNote: label.includes("thăng chức")
         ? `Lần thăng chức gần nhất: ${employee.lastPromotionYear}`
-        : label.toLowerCase().includes("idp")
+        : lower.includes("idp")
           ? "Theo nhật ký IDP / review chu kỳ"
-          : undefined,
+          : lower.includes("ktp")
+            ? "Theo KTP holder progress / kế hoạch chuyển giao"
+            : lower.includes("mentor")
+              ? "Chưa gán mentor trong hệ thống PTNT"
+              : undefined,
     });
-  }
-  if (marketIntelActive) {
-    const mi = getMarketIntelligence(employee);
-    rows.push({
-      id: "mk-headhunt",
-      label: marketIntelligenceRiskHeadhuntLabel(mi),
-      severity:
-        mi.headhuntFreqVsMarket >= 30 ? "high" : mi.headhuntFreqVsMarket >= 20 ? "medium" : "low",
-      source: "hr_noted",
-      notedAt: mi.lastUpdated,
-      detailNote: "Theo Market Intelligence (LinkedIn / Talentnet)",
-    });
-    rows.push({
-      id: "mk-salary",
-      label: marketIntelligenceRiskSalaryLabel(mi),
-      severity:
-        mi.salaryGapVsMarket < -8 ? "high" : mi.salaryGapVsMarket < 0 ? "medium" : "low",
-      source: "hr_noted",
-      notedAt: mi.lastUpdated,
-      detailNote: "Theo Market Intelligence (LinkedIn / Talentnet)",
-    });
-    for (const label of filterQualitativeMarketRiskFactors(employee)) {
-      rows.push({
-        id: `mk-${i++}`,
-        label,
-        severity: inferSeverity(label, employee.riskScore),
-        source: "hr_noted",
-        notedAt: "Tháng 2/25",
-        detailNote: "Theo báo cáo Market Intelligence",
-      });
-    }
   }
   return rows;
 }

@@ -13,7 +13,7 @@ import {
   buildHrm360AccordionView,
   pickLatestAssessment,
 } from "@/components/talent/talentProfileHrm360FromAssessment";
-import { getMarketIntelligence } from "@/data/marketIntelligence";
+import { getMarketIntel } from "@/data/marketIntelligenceData";
 import { MarketIntelligenceCard } from "@/components/talent/MarketIntelligenceCard";
 
 export function TalentProfileZoneCRiskHrm(props: {
@@ -21,10 +21,7 @@ export function TalentProfileZoneCRiskHrm(props: {
   marketIntelActive: boolean;
 }) {
   const { employee, marketIntelActive } = props;
-  const riskFactors = React.useMemo(
-    () => buildRiskFactorRows(employee, marketIntelActive),
-    [employee, marketIntelActive],
-  );
+  const riskFactors = React.useMemo(() => buildRiskFactorRows(employee), [employee]);
 
   const latestAssessment = React.useMemo(
     () => pickLatestAssessment(allAssessments, employee.id),
@@ -35,7 +32,7 @@ export function TalentProfileZoneCRiskHrm(props: {
   const totalScore = hrmView?.totalScore ?? 0;
   const criteria = hrmView?.criteria ?? [];
 
-  const mi = React.useMemo(() => getMarketIntelligence(employee), [employee]);
+  const mi = React.useMemo(() => getMarketIntel(employee.id), [employee.id]);
 
   return (
     <div className="mt-4">
@@ -273,7 +270,7 @@ export function TalentProfileZoneCRiskHrm(props: {
           title="Thị trường & Rủi ro nhân sự"
           badge={
             mi.salaryGapVsMarket < -8
-              ? `Lương -${Math.abs(mi.salaryGapVsMarket)}% thị trường`
+              ? `Lương ${mi.salaryGapVsMarket}% thị trường`
               : `Scarcity ${mi.talentScarcity}%`
           }
           badgeBg={mi.salaryGapVsMarket < -8 ? "#FEE2E2" : "#EEF2FF"}

@@ -1,6 +1,5 @@
 import type { Employee } from './types'
-import { DEFAULT_MARKET_INTELLIGENCE } from './marketIntelligence'
-import { marketIntelligenceData } from './marketIntelligenceData'
+import { getMarketIntel } from './marketIntelligenceData'
 
 // ============================================================
 // Employees — 25 nhân viên trong Chuỗi Phát triển Nhân tài
@@ -79,8 +78,11 @@ const employeesSeed: Employee[] = [
 
     riskScore: 35,
     riskLevel: 'medium',
-    internalRiskFactors: [],
-    marketRiskFactors: ['Nhận offer từ nhà thầu nước ngoài (tin nội bộ)', 'Chưa tăng lương 18 tháng'],
+    internalRiskFactors: [
+      'Nhận offer từ nhà thầu nước ngoài (tin nội bộ)',
+      'Chưa tăng lương 18 tháng',
+    ],
+    marketRiskFactors: [],
 
     currentProjectId: 'proj-001',
     projectRole: 'Engineering Manager',
@@ -231,7 +233,11 @@ const employeesSeed: Employee[] = [
 
     riskScore: 62,
     riskLevel: 'high',
-    internalRiskFactors: ['Chưa thăng chức 4 năm'],
+    internalRiskFactors: [
+      'Chưa thăng chức 4 năm',
+      'Chưa có mentor',
+      'KTP tiến độ thấp 40%',
+    ],
     marketRiskFactors: [],
 
     currentProjectId: 'proj-002',
@@ -691,8 +697,11 @@ const employeesSeed: Employee[] = [
 
     riskScore: 50,
     riskLevel: 'medium',
-    internalRiskFactors: ['Mới vào công ty 4 năm'],
-    marketRiskFactors: ['Đang được các công ty nước ngoài tiếp cận'],
+    internalRiskFactors: [
+      'Mới vào công ty 4 năm',
+      'Áp lực giữ người — BD junior được săn đón từ nhiều nhà thầu',
+    ],
+    marketRiskFactors: [],
 
     currentProjectId: undefined,
     projectRole: 'BD Specialist',
@@ -977,5 +986,5 @@ const employeesSeed: Employee[] = [
 
 export const employees: Employee[] = employeesSeed.map((emp) => ({
   ...emp,
-  marketIntelligence: marketIntelligenceData[emp.id] ?? DEFAULT_MARKET_INTELLIGENCE,
+  marketIntelligence: getMarketIntel(emp.id),
 }))

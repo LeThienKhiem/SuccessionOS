@@ -1,23 +1,11 @@
 import type { Employee, MarketIntelligence } from "./types";
-import { marketIntelligenceData } from "./marketIntelligenceData";
+import { DEFAULT_MARKET_INTEL, getMarketIntel } from "./marketIntelligenceData";
 
-/** Fallback khi không có trong `marketIntelligenceData` (vd. nhân viên mới) */
-export const DEFAULT_MARKET_INTELLIGENCE: MarketIntelligence = {
-  profileViewsVsMarket: 8,
-  headhuntFreqVsMarket: 10,
-  salaryGapVsMarket: -3,
-  talentScarcity: 72,
-  demandTrend: "stable",
-  lastUpdated: "03/2026",
-  sources: ["LinkedIn Talent Insights"],
-};
+/** Alias cũ — đồng bộ với `DEFAULT_MARKET_INTEL` trong `marketIntelligenceData.ts` */
+export const DEFAULT_MARKET_INTELLIGENCE: MarketIntelligence = DEFAULT_MARKET_INTEL;
 
 export function getMarketIntelligence(employee: Employee): MarketIntelligence {
-  return (
-    marketIntelligenceData[employee.id] ??
-    employee.marketIntelligence ??
-    DEFAULT_MARKET_INTELLIGENCE
-  );
+  return employee.marketIntelligence ?? getMarketIntel(employee.id);
 }
 
 /** Chuỗi mock cũ đã thay bằng % từ Market Intelligence */
